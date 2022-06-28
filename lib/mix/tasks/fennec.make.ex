@@ -26,15 +26,21 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
       #{Enum.map_join(FennecPrecompile.Config.default_targets(), "\n", &"    - `#{&1}`")}
   """
   def run(args) do
-    case args do
-      ["--fennec_precompile" | other_args] ->
-        saved_cwd = File.cwd!()
+    {args, precompile} =
+      if "--fennec_precompile" in args do
+        {args -- ["--fennec_precompile"], true}
+      else
+        {args, false}
+      end
+
+    if precompile do
+      saved_cwd = File.cwd!()
         cache_dir = System.get_env("FENNEC_CACHE_DIR", nil)
         if cache_dir do
           System.put_env("FENNEC_CACHE_DIR", cache_dir)
         end
         cache_dir = FennecPrecompile.cache_dir("")
-        do_fennec_precompile(other_args, saved_cwd, cache_dir)
+        do_fennec_precompile(args, saved_cwd, cache_dir)
 
         make_priv_dir(:clean)
         with {:ok, target} <- FennecPrecompile.target(FennecPrecompile.Config.default_targets()) do
@@ -42,8 +48,8 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
           cached_tar_gz = Path.join([cache_dir, tar_filename])
           FennecPrecompile.restore_nif_file(cached_tar_gz)
         end
-      _ ->
-        Mix.Tasks.Compile.ElixirMake.run(args)
+    else
+      Mix.Tasks.Compile.ElixirMake.run(args)
     end
 
     Mix.Project.build_structure()

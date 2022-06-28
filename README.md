@@ -15,11 +15,19 @@ def project do
 end
 ```
 
-Then run `mix compile` with the `--fennec_precompile` flag.
+Precompiling only happens when run `mix compile` with the `--fennec_precompile` flag.
 ```elixir
 export FENNEC_CACHE_DIR="$(pwd)/cache"
 mkdir -p "${FENNEC_CACHE_DIR}"
 mix compile --fennec_precompile
+
+# without the `--fennec_precompile` flag, it behaves as normal
+mix compile
+
+# it's also possible to run `mix compile --fennec_precompile` with other flags
+# the order of these flags is not important
+mix compile --fennec_precompile --force
+mix compile --force --fennec_precompile
 ```
 
 The following targets will be compiled:
