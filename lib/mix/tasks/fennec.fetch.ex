@@ -58,6 +58,6 @@ defmodule Mix.Tasks.Fennec.Fetch do
       |> IO.puts()
     end
 
-    FennecPrecompile.write_checksum!(app, result)
+    FennecPrecompile.write_checksum!(result)
   end
 end
