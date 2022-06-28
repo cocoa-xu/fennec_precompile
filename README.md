@@ -5,7 +5,7 @@ Drop-in plugin for `:elixir_make` that precompiles NIF binaries and pull NIF lib
 This work is inspired ~~(massive copy-and-paste)~~ by [`rustler_precompiled`](https://github.com/philss/rustler_precompiled). However, this plugin is more focused on crosscompiling C/C++ projects using Zig as a Cross-compiler whereas `rustler_precompiled` is focused on crosscompiling Rust projects using Rust.
 
 ## Usage
-Change the `:elixir_make` compiler to:
+Remove the `:elixir_make` compiler from the `compilers` section:
 
 ```elixir
 def project do
@@ -19,14 +19,24 @@ end
 
 Precompiling happens when run `mix fennec.precompile`.
 ```elixir
+# optional settings to override the default cache directory
 export FENNEC_CACHE_DIR="$(pwd)/cache"
-mkdir -p "${FENNEC_CACHE_DIR}"
+
+# precompile
 mix fennec.precompile
 
 # it's also possible to run `mix fennec.precompile` with other flags 
 # other flags will be passed to `:elixir_make`
 mix fennec.precompile --my-flag
 ```
+
+What happens when you run `mix fennec.precompile`?
+
+- `CC` will be set to `zig cc -target "ARCH-OS-ABI"`
+- `CXX` will be set to `zig c++ -target "ARCH-OS-ABI"`
+- `CPP` will be set to `zig c++ -target "ARCH-OS-ABI"`
+
+Everything else is the same as when you run `mix compile` (with `:elixir_make`, or `mix compile.elixir_make`).
 
 To fetch precompiled binaries, run `mix fennec.fetch`.
 ```elixir
