@@ -1,8 +1,8 @@
 # FennecPrecompile
 
-Drop-in plugin for `:elixir_make` that precompiles NIF binaries and pull NIF libraries.
+Drop-in library for `:elixir_make` that precompiles NIF binaries and pull NIF libraries.
 
-This work is inspired ~~(massive copy-and-paste)~~ by [`rustler_precompiled`](https://github.com/philss/rustler_precompiled). However, this plugin is more focused on crosscompiling C/C++ projects using Zig as a Cross-compiler whereas `rustler_precompiled` is focused on crosscompiling Rust projects using Rust.
+This work is inspired ~~(massive copy-and-paste)~~ by [`rustler_precompiled`](https://github.com/philss/rustler_precompiled). However, this library is more focused on crosscompiling C/C++ projects using Zig as a Cross-compiler whereas `rustler_precompiled` is focused on crosscompiling Rust projects to NIF using Rust with [`rustler`](https://github.com/rusterlium/rustler).
 
 ## Usage
 Remove the `:elixir_make` compiler from the `compilers` section:
