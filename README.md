@@ -70,6 +70,15 @@ A full list of supported targets can be found using `zig targets`.
 
 It's worth noting that some targets may not successfully compile on certain platforms. For example, `x86_64-macos` will not compile on Linux and `x86_64-windows-msvc` will not compile on macOS.
 
+To compile for a specific target/a list of targets, set the `FENNEC_TARGETS` environment variable.
+
+```elixir
+# for example, to compile for aarch64-linux-musl,riscv64-linux-musl
+export FENNEC_CACHE_DIR="$(pwd)/cache"
+export FENNEC_TARGETS="aarch64-linux-musl,riscv64-linux-musl"
+mix fennec.precompile
+```
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

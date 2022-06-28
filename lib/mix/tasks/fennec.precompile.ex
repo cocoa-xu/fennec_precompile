@@ -45,8 +45,15 @@ defmodule Mix.Tasks.Fennec.Precompile do
     cache_dir = FennecPrecompile.cache_dir("")
     do_fennec_precompile(args, saved_cwd, cache_dir)
 
+    targets = System.get_env("FENNEC_TARGETS")
+    targets =
+      if targets do
+        String.split(targets, ",", trim: true)
+      else
+        FennecPrecompile.Config.default_targets()
+      end
     make_priv_dir(:clean)
-    with {:ok, target} <- FennecPrecompile.target(FennecPrecompile.Config.default_targets()) do
+    with {:ok, target} <- FennecPrecompile.target(targets) do
       tar_filename = "#{target}.tar.gz"
       cached_tar_gz = Path.join([cache_dir, tar_filename])
       FennecPrecompile.restore_nif_file(cached_tar_gz)

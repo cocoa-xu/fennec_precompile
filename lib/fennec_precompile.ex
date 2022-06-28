@@ -41,7 +41,7 @@ defmodule FennecPrecompile do
       message = """
       Error while downloading precompiled NIF: #{precomp_error}.
       You can force the project to build from scratch with:
-          mix compile fennec_precompile
+          mix fennec.precompile
       """
 
       {:error, message}
