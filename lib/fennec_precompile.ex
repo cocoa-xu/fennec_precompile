@@ -34,6 +34,7 @@ defmodule FennecPrecompile do
       |> Keyword.put_new(:module, module)
       |> FennecPrecompile.Config.new()
 
+    write_metadata_to_file(config)
     load_path = "#{:code.priv_dir(Mix.Project.config()[:app])}/#{config.nif_filename}.so"
     with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
          {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
@@ -52,33 +53,35 @@ defmodule FennecPrecompile do
   alias FennecPrecompile.Config
   require Logger
 
-  @available_nif_versions ~w(2.14 2.15 2.16)
+  @available_nif_versions ~w(2.16)
   @checksum_algo :sha256
   @checksum_algorithms [@checksum_algo]
 
+  def write_metadata_to_file(%Config{} = config) do
+    app = Mix.Project.config()[:app]
+
+    with {:ok, target} <- target(config.targets) do
+      metadata = %{
+        otp_app: app,
+        cached_tar_gz: Path.join([cache_dir(""), "#{target}.tar.gz"]),
+        base_url: config.base_url,
+        target: target,
+        targets: config.targets,
+        version: config.version
+      }
+
+      write_metadata(app, metadata)
+    end
+    :ok
+  end
+
   def download_or_reuse_nif_file(%Config{} = config) do
     Logger.debug("Download/Reuse: #{inspect(config)}")
-    name = to_string(Mix.Project.config()[:app])
-    version = config.version
     cache_dir = cache_dir("")
 
     with {:ok, target} <- target(config.targets) do
       tar_filename = "#{target}.tar.gz"
       cached_tar_gz = Path.join([cache_dir, tar_filename])
-
-      base_url = config.base_url
-      nif_module = config.module
-
-      metadata = %{
-        otp_app: name,
-        cached_tar_gz: cached_tar_gz,
-        base_url: base_url,
-        target: target,
-        targets: config.targets,
-        version: version
-      }
-
-      write_metadata(nif_module, metadata)
 
       result = %{
         load?: true,
@@ -87,7 +90,7 @@ defmodule FennecPrecompile do
 
       if !File.exists?(cached_tar_gz) do
         with :ok <- File.mkdir_p(cache_dir),
-             {:ok, tar_gz} <- download_tar_gz(base_url, tar_filename),
+             {:ok, tar_gz} <- download_tar_gz(config.base_url, tar_filename),
              :ok <- File.write(cached_tar_gz, tar_gz) do
             Logger.debug("NIF cached at #{cached_tar_gz} and extracted to #{app_priv()}")
         end
@@ -109,8 +112,44 @@ defmodule FennecPrecompile do
   end
 
   def restore_nif_file(cached_tar_gz) do
-    Logger.debug("Restore build for current node from: #{cached_tar_gz}")
+    Logger.debug("Restore NIF for current node from: #{cached_tar_gz}")
     :erl_tar.extract(cached_tar_gz, [:compressed, cwd: app_priv()])
+  end
+
+  @doc """
+  Returns URLs for NIFs based on its module name.
+  The module name is the one that defined the NIF and this information
+  is stored in a metadata file.
+  """
+  def available_nif_urls(app) when is_atom(app) do
+    metadata =
+      app
+      |> metadata_file()
+      |> read_map_from_file()
+
+    case metadata do
+      %{targets: targets, base_url: base_url, version: version} ->
+        for target_triple <- targets, nif_version <- @available_nif_versions do
+          target = "#{to_string(app)}-nif-#{nif_version}-#{target_triple}-#{version}"
+
+          tar_gz_file_url(base_url, target)
+        end
+
+      _ ->
+        raise "metadata about current target for the app #{inspect(app)} is not available. " <>
+                "Please compile the project again with: `mix compile --fennec_precompile`"
+    end
+  end
+
+  defp tar_gz_file_url(base_url, file_name) do
+    uri = URI.parse(base_url)
+
+    uri =
+      Map.update!(uri, :path, fn path ->
+        Path.join(path || "", "#{file_name}.tar.gz")
+      end)
+
+    to_string(uri)
   end
 
   defp app_priv() do
@@ -338,8 +377,8 @@ defmodule FennecPrecompile do
     end
   end
 
-  defp write_metadata(nif_module, metadata) do
-    metadata_file = metadata_file(nif_module)
+  defp write_metadata(app, metadata) do
+    metadata_file = metadata_file(app)
     existing = read_map_from_file(metadata_file)
 
     unless Map.equal?(metadata, existing) do
@@ -352,9 +391,9 @@ defmodule FennecPrecompile do
     :ok
   end
 
-  defp metadata_file(nif_module) when is_atom(nif_module) do
+  defp metadata_file(app) do
     fennec_precompiled_cache = cache_dir("metadata")
-    Path.join(fennec_precompiled_cache, "metadata-#{nif_module}.exs")
+    Path.join(fennec_precompiled_cache, "metadata-#{app}.exs")
   end
 
   defp download_tar_gz(base_url, target_name) do
