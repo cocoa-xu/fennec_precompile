@@ -139,10 +139,10 @@ defmodule FennecPrecompile do
   This function is translating and adding more info to the system
   architecture returned by Elixir/Erlang to one used by Zig.
   The returned string has the following format:
-      "APP-nif-NIF_VERSION-ARCHITECTURE-VENDOR-OS-ABI-APP_VERSION"
+      "APP-nif-NIF_VERSION-ARCHITECTURE-OS-ABI-APP_VERSION"
   ## Examples
       iex> FennecPrecompile.target()
-      {:ok, "fennec-nif-2.16-x86_64-unknown-linux-gnu-0.1.0"}
+      {:ok, "fennec-nif-2.16-x86_64-linux-gnu-0.1.0"}
       iex> FennecPrecompile.target()
       {:ok, "fennec-nif-2.16-aarch64-macos-0.1.0"}
   """
@@ -183,7 +183,6 @@ defmodule FennecPrecompile do
 
             config.target_system
             |> Map.put_new(:arch, arch)
-            |> Map.put_new(:vendor, "pc")
             |> Map.put_new(:os, "windows")
             |> Map.put_new(:abi, "msvc")
             |> system_arch_to_string()
@@ -217,9 +216,8 @@ defmodule FennecPrecompile do
 
       target_system.os =~ "linux" ->
         arch = with "amd64" <- target_system.arch, do: "x86_64"
-        vendor = with "pc" <- target_system.vendor, do: "unknown"
 
-        %{target_system | arch: arch, vendor: vendor}
+        %{target_system | arch: arch}
 
       true ->
         target_system
@@ -228,7 +226,7 @@ defmodule FennecPrecompile do
 
   defp system_arch_to_string(system_arch) do
     values =
-      for key <- [:arch, :vendor, :os, :abi],
+      for key <- [:arch, :os, :abi],
           value = system_arch[key],
           do: value
 
@@ -285,7 +283,7 @@ defmodule FennecPrecompile do
     vsn |> String.split(".") |> Enum.map(&String.to_integer/1)
   end
 
-  # Returns a map with `:arch`, `:vendor`, `:os` and maybe `:abi`.
+  # Returns a map with `:arch`, `:os` and maybe `:abi`.
   defp system_arch do
     base =
       :erlang.system_info(:system_architecture)
@@ -316,27 +314,17 @@ defmodule FennecPrecompile do
   def maybe_override_with_env_vars(original_sys_arch, get_env \\ &System.get_env/1) do
     envs_with_keys = [
       arch: "TARGET_ARCH",
-      vendor: "TARGET_VENDOR",
       os: "TARGET_OS",
       abi: "TARGET_ABI"
     ]
 
-    updated_system_arch =
-      Enum.reduce(envs_with_keys, original_sys_arch, fn {key, env_key}, acc ->
-        if env_value = get_env.(env_key) do
-          Map.put(acc, key, env_value)
-        else
-          acc
-        end
-      end)
-
-    # Only replace vendor if remains the same but some other env changed the config.
-    if original_sys_arch != updated_system_arch and
-         original_sys_arch.vendor == updated_system_arch.vendor do
-      Map.put(updated_system_arch, :vendor, "unknown")
-    else
-      updated_system_arch
-    end
+    Enum.reduce(envs_with_keys, original_sys_arch, fn {key, env_key}, acc ->
+      if env_value = get_env.(env_key) do
+        Map.put(acc, key, env_value)
+      else
+        acc
+      end
+    end)
   end
 
   defp read_map_from_file(file) do
