@@ -29,8 +29,10 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
     case args do
       ["--fennec_precompile" | other_args] ->
         saved_cwd = File.cwd!()
-        cache_dir = System.get_env("FENNEC_CACHE_DIR", nil) || ""
-        System.put_env("FENNEC_CACHE_DIR", cache_dir)
+        cache_dir = System.get_env("FENNEC_CACHE_DIR", nil)
+        if cache_dir do
+          System.put_env("FENNEC_CACHE_DIR", cache_dir)
+        end
         cache_dir = FennecPrecompile.cache_dir("")
         do_fennec_precompile(other_args, saved_cwd, cache_dir)
 
