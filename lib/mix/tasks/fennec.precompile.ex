@@ -72,7 +72,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
     saved_cpp = System.get_env("CPP") || ""
 
     checksums = fennec_precompile(args, targets, cache_dir)
-    FennecPrecompile.write_checksum!(Mix.Project.config()[:app], checksums)
+    FennecPrecompile.write_checksum!(checksums)
 
     File.cd!(saved_cwd)
     System.put_env("CC", saved_cc)

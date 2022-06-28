@@ -606,34 +606,22 @@ defmodule FennecPrecompile do
   # Write the checksum file with all NIFs available.
   # It receives the module name and checksums.
   @doc false
-  def write_checksum!(app, checksums) do
-    metadata =
-      app
-      |> metadata_file()
-      |> read_map_from_file()
+  def write_checksum!(checksums) do
+    file = checksum_file()
 
-    case metadata do
-      %{otp_app: _name} ->
-        file = checksum_file()
+    pairs =
+      for %{path: path, checksum: checksum, checksum_algo: algo} <- checksums, into: %{} do
+        basename = Path.basename(path)
+        checksum = "#{algo}:#{checksum}"
+        {basename, checksum}
+      end
 
-        pairs =
-          for %{path: path, checksum: checksum, checksum_algo: algo} <- checksums, into: %{} do
-            basename = Path.basename(path)
-            checksum = "#{algo}:#{checksum}"
-            {basename, checksum}
-          end
+    lines =
+      for {filename, checksum} <- Enum.sort(pairs) do
+        ~s(  "#{filename}" => #{inspect(checksum, limit: :infinity)},\n)
+      end
 
-        lines =
-          for {filename, checksum} <- Enum.sort(pairs) do
-            ~s(  "#{filename}" => #{inspect(checksum, limit: :infinity)},\n)
-          end
-
-        File.write!(file, ["%{\n", lines, "}\n"])
-
-      _ ->
-        raise "could not find the OTP app for #{inspect(app)} in the metadata file. " <>
-                "Please compile the project again with: `mix fennec.precompile`."
-    end
+    File.write!(file, ["%{\n", lines, "}\n"])
   end
 
   def checksum_file() do
