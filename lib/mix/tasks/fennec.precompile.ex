@@ -43,15 +43,8 @@ defmodule Mix.Tasks.Fennec.Precompile do
       System.put_env("FENNEC_CACHE_DIR", cache_dir)
     end
     cache_dir = FennecPrecompile.cache_dir("")
-    do_fennec_precompile(args, saved_cwd, cache_dir)
-
-    targets = System.get_env("FENNEC_TARGETS")
-    targets =
-      if targets do
-        String.split(targets, ",", trim: true)
-      else
-        FennecPrecompile.Config.default_targets()
-      end
+    targets = compile_targets()
+    do_fennec_precompile(args, targets, saved_cwd, cache_dir)
     make_priv_dir(:clean)
     with {:ok, target} <- FennecPrecompile.target(targets) do
       tar_filename = "#{target}.tar.gz"
@@ -64,12 +57,21 @@ defmodule Mix.Tasks.Fennec.Precompile do
     :ok
   end
 
-  defp do_fennec_precompile(other_args, saved_cwd, cache_dir) do
+  defp compile_targets() do
+    targets = System.get_env("FENNEC_TARGETS")
+    if targets do
+      String.split(targets, ",", trim: true)
+    else
+      FennecPrecompile.Config.default_targets()
+    end
+  end
+
+  defp do_fennec_precompile(args, targets, saved_cwd, cache_dir) do
     saved_cc = System.get_env("CC") || ""
     saved_cxx = System.get_env("CXX") || ""
     saved_cpp = System.get_env("CPP") || ""
 
-    checksums = fennec_precompile(other_args, cache_dir)
+    checksums = fennec_precompile(args, targets, cache_dir)
     FennecPrecompile.write_checksum!(Mix.Project.config()[:app], checksums)
 
     File.cd!(saved_cwd)
@@ -78,8 +80,8 @@ defmodule Mix.Tasks.Fennec.Precompile do
     System.put_env("CPP", saved_cpp)
   end
 
-  defp fennec_precompile(args, cache_dir) do
-    Enum.reduce(FennecPrecompile.Config.default_targets(), [], fn target, checksums ->
+  defp fennec_precompile(args, targets, cache_dir) do
+    Enum.reduce(targets, [], fn target, checksums ->
       Logger.debug("Current compiling target: #{target}")
       make_priv_dir(:clean)
       {cc, cxx} =
