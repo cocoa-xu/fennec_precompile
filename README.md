@@ -2,6 +2,8 @@
 
 Drop-in plugin for `:elixir_make` that precompiles NIF binaries and pull NIF libraries.
 
+This work is inspired ~~(massive copy-and-paste)~~ by [`rustler_precompiled`](https://github.com/philss/rustler_precompiled). However, this plugin is more focused on crosscompiling C/C++ projects using Zig as a Cross-compiler whereas `rustler_precompiled` is focused on crosscompiling Rust projects using Rust.
+
 ## Usage
 Change the `:elixir_make` compiler to:
 
@@ -69,3 +71,18 @@ Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_do
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/fennec_precompile>.
 
+## License
+
+Copyright 2022 Cocoa Xu
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
