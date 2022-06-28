@@ -34,7 +34,9 @@ defmodule FennecPrecompile do
       |> Keyword.put_new(:module, module)
       |> FennecPrecompile.Config.new()
 
-    with {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
+    load_path = "#{:code.priv_dir(Mix.Project.config()[:app])}/#{config.nif_filename}.so"
+    with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
+         {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
       message = """
       Error while downloading precompiled NIF: #{precomp_error}.
       You can force the project to build from scratch with:
@@ -55,7 +57,7 @@ defmodule FennecPrecompile do
   @checksum_algorithms [@checksum_algo]
 
   def download_or_reuse_nif_file(%Config{} = config) do
-    Logger.debug("download: #{inspect(config)}")
+    Logger.debug("Download/Reuse: #{inspect(config)}")
     name = to_string(Mix.Project.config()[:app])
     version = config.version
     cache_dir = cache_dir("")
