@@ -17,6 +17,8 @@ def project do
 end
 ```
 
+Make sure Zig is installed, `which zig`. To install Zig from a package manager, please see the [Install-Zig-from-a-Package-Manager](https://github.com/ziglang/zig/wiki/Install-Zig-from-a-Package-Manager).
+
 Precompiling happens when run `mix fennec.precompile`.
 ```elixir
 # optional settings to override the default cache directory
@@ -63,6 +65,10 @@ The following targets will be compiled by default:
   - riscv64-linux-musl
 - Windows
   - x86_64-windows-gnu
+
+A full list of supported targets can be found using `zig targets`.
+
+It's worth noting that some targets may not successfully compile on certain platforms. For example, `x86_64-macos` will not compile on Linux and `x86_64-windows-msvc` will not compile on macOS.
 
 ## Installation
 
