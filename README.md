@@ -9,28 +9,36 @@ Change the `:elixir_make` compiler to:
 def project do
   [
     # ...
-    compilers: [:fennec_precompile] ++ Mix.compilers(),
+    compilers: Mix.compilers(),
     # ...
   ]
 end
 ```
 
-Precompiling only happens when run `mix compile` with the `--fennec_precompile` flag.
+Precompiling happens when run `mix fennec.precompile`.
 ```elixir
 export FENNEC_CACHE_DIR="$(pwd)/cache"
 mkdir -p "${FENNEC_CACHE_DIR}"
-mix compile --fennec_precompile
+mix fennec.precompile
 
-# without the `--fennec_precompile` flag, it behaves as normal
-mix compile
-
-# it's also possible to run `mix compile --fennec_precompile` with other flags
-# the order of these flags is not important
-mix compile --fennec_precompile --force
-mix compile --force --fennec_precompile
+# it's also possible to run `mix fennec.precompile` with other flags 
+# other flags will be passed to `:elixir_make`
+mix fennec.precompile --my-flag
 ```
 
-The following targets will be compiled:
+To fetch precompiled binaries, run `mix fennec.fetch`.
+```elixir
+# fetch all precompiled binaries
+mix fennec.fetch --all
+# fetch specific binaries
+mix fennec.fetch --only-local
+
+# print checksums
+mix fennec.fetch --all --print
+mix fennec.fetch --only-local --print
+```
+
+The following targets will be compiled by default:
 
 - macOS
   - x86_64-macos

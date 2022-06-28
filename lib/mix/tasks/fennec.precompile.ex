@@ -1,7 +1,4 @@
-defmodule Mix.Tasks.Compile.FennecPrecompile do
-  use Mix.Task
-  require Logger
-
+defmodule Mix.Tasks.Fennec.Precompile do
   @moduledoc """
   Download and use precompiled NIFs safely with checksums.
   Fennec Precompile is a tool for library maintainers that use `:elixir_make`
@@ -25,31 +22,25 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
       configured:
       #{Enum.map_join(FennecPrecompile.Config.default_targets(), "\n", &"    - `#{&1}`")}
   """
+
+  use Mix.Task
+  require Logger
+
+  @impl true
   def run(args) do
-    {args, precompile} =
-      if "--fennec_precompile" in args do
-        {args -- ["--fennec_precompile"], true}
-      else
-        {args, false}
-      end
+    saved_cwd = File.cwd!()
+    cache_dir = System.get_env("FENNEC_CACHE_DIR", nil)
+    if cache_dir do
+      System.put_env("FENNEC_CACHE_DIR", cache_dir)
+    end
+    cache_dir = FennecPrecompile.cache_dir("")
+    do_fennec_precompile(args, saved_cwd, cache_dir)
 
-    if precompile do
-      saved_cwd = File.cwd!()
-        cache_dir = System.get_env("FENNEC_CACHE_DIR", nil)
-        if cache_dir do
-          System.put_env("FENNEC_CACHE_DIR", cache_dir)
-        end
-        cache_dir = FennecPrecompile.cache_dir("")
-        do_fennec_precompile(args, saved_cwd, cache_dir)
-
-        make_priv_dir(:clean)
-        with {:ok, target} <- FennecPrecompile.target(FennecPrecompile.Config.default_targets()) do
-          tar_filename = "#{target}.tar.gz"
-          cached_tar_gz = Path.join([cache_dir, tar_filename])
-          FennecPrecompile.restore_nif_file(cached_tar_gz)
-        end
-    else
-      Mix.Tasks.Compile.ElixirMake.run(args)
+    make_priv_dir(:clean)
+    with {:ok, target} <- FennecPrecompile.target(FennecPrecompile.Config.default_targets()) do
+      tar_filename = "#{target}.tar.gz"
+      cached_tar_gz = Path.join([cache_dir, tar_filename])
+      FennecPrecompile.restore_nif_file(cached_tar_gz)
     end
 
     Mix.Project.build_structure()
@@ -62,8 +53,8 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
     saved_cxx = System.get_env("CXX") || ""
     saved_cpp = System.get_env("CPP") || ""
 
-    checksum_map = fennec_precompile(other_args, cache_dir)
-    File.write!("checksum-#{Mix.Project.config()[:app]}.exs", inspect(checksum_map))
+    checksums = fennec_precompile(other_args, cache_dir)
+    FennecPrecompile.write_checksum!(Mix.Project.config()[:app], checksums)
 
     File.cd!(saved_cwd)
     System.put_env("CC", saved_cc)
@@ -72,7 +63,7 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
   end
 
   defp fennec_precompile(args, cache_dir) do
-    Enum.reduce(FennecPrecompile.Config.default_targets(), %{}, fn target, checksum_map ->
+    Enum.reduce(FennecPrecompile.Config.default_targets(), [], fn target, checksums ->
       Logger.debug("Current compiling target: #{target}")
       make_priv_dir(:clean)
       {cc, cxx} =
@@ -91,7 +82,7 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
 
       {archive_full_path, archive_tar_gz} = create_precompiled_archive(target, cache_dir)
       {:ok, algo, checksum} = FennecPrecompile.compute_checksum(archive_full_path, :sha256)
-      Map.put(checksum_map, archive_tar_gz, "#{algo}:#{checksum}")
+      [%{path: archive_tar_gz, checksum_algo: algo, checksum: checksum} | checksums]
     end)
   end
 

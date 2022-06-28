@@ -1,5 +1,5 @@
-defmodule Mix.Tasks.FennecPrecompile.Download do
-  @shortdoc "Download precompiled NIFs and build the checksums"
+defmodule Mix.Tasks.Fennec.Fetch do
+  @shortdoc "Fetch precompiled NIFs and build the checksums"
 
   @moduledoc """
   A task responsible for downloading the precompiled NIFs for a given module.

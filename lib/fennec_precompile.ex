@@ -137,7 +137,27 @@ defmodule FennecPrecompile do
 
       _ ->
         raise "metadata about current target for the app #{inspect(app)} is not available. " <>
-                "Please compile the project again with: `mix compile --fennec_precompile`"
+                "Please compile the project again with: `mix fennec.precompile`"
+    end
+  end
+
+  @doc """
+  Returns the file URL to be downloaded for current target.
+  It receives the NIF module.
+  """
+  def current_target_nif_url(app) do
+    metadata =
+      app
+      |> metadata_file()
+      |> read_map_from_file()
+
+    case metadata do
+      %{base_url: base_url, target: target} ->
+        tar_gz_file_url(base_url, target)
+
+      _ ->
+        raise "metadata about current target for the app #{inspect(app)} is not available. " <>
+                "Please compile the project again with: `mix fennec.precompile`"
     end
   end
 
@@ -580,6 +600,39 @@ defmodule FennecPrecompile do
         {:error,
          "cannot read the file for checksum comparison: #{inspect(file_path)}. " <>
            "Reason: #{inspect(reason)}"}
+    end
+  end
+
+  # Write the checksum file with all NIFs available.
+  # It receives the module name and checksums.
+  @doc false
+  def write_checksum!(app, checksums) do
+    metadata =
+      app
+      |> metadata_file()
+      |> read_map_from_file()
+
+    case metadata do
+      %{otp_app: _name} ->
+        file = checksum_file()
+
+        pairs =
+          for %{path: path, checksum: checksum, checksum_algo: algo} <- checksums, into: %{} do
+            basename = Path.basename(path)
+            checksum = "#{algo}:#{checksum}"
+            {basename, checksum}
+          end
+
+        lines =
+          for {filename, checksum} <- Enum.sort(pairs) do
+            ~s(  "#{filename}" => #{inspect(checksum, limit: :infinity)},\n)
+          end
+
+        File.write!(file, ["%{\n", lines, "}\n"])
+
+      _ ->
+        raise "could not find the OTP app for #{inspect(app)} in the metadata file. " <>
+                "Please compile the project again with: `mix fennec.precompile`."
     end
   end
 
