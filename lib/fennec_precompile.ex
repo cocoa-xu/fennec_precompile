@@ -87,7 +87,7 @@ defmodule FennecPrecompile do
 
       if !File.exists?(cached_tar_gz) do
         with :ok <- File.mkdir_p(cache_dir),
-             {:ok, tar_gz} <- download_tar_gz(base_url, cached_tar_gz),
+             {:ok, tar_gz} <- download_tar_gz(base_url, tar_filename),
              :ok <- File.write(cached_tar_gz, tar_gz) do
             Logger.debug("NIF cached at #{cached_tar_gz} and extracted to #{app_priv()}")
         end
