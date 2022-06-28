@@ -6,7 +6,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
   replacement for `:elixir_make`.
   It helps by removing the need to have the C/C++ compiler and other dependencies
   installed in the user's machine.
-  Check the [Precompilation Guide](PRECOMPILATION_GUIDE.md) for details.
+  Check the [README.md](https://github.com/cocoa-xu/fennec_precompile/blob/main/README.md) for details.
   ## Example
       defmodule MyNative do
         use FennecPrecompile,
@@ -20,7 +20,16 @@ defmodule Mix.Tasks.Fennec.Precompile do
       Zig](https://ziglang.org/learn/overview/#support-table) for which
       precompiled assets are avilable. By default the following targets are
       configured:
-      #{Enum.map_join(FennecPrecompile.Config.default_targets(), "\n", &"    - `#{&1}`")}
+
+      - `x86_64-macos`
+      - `x86_64-linux-gnu`
+      - `x86_64-linux-musl`
+      - `x86_64-windows-gnu`
+      - `aarch64-macos`
+      - `aarch64-linux-gnu`
+      - `aarch64-linux-musl`
+      - `riscv64-linux-musl`
+
   """
 
   use Mix.Task
