@@ -72,10 +72,10 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   @impl true
   def run(args) do
-    build_with_targets(args, compile_targets())
+    build_with_targets(args, compile_targets(), true)
   end
 
-  def build_with_targets(args, targets) do
+  def build_with_targets(args, targets, post_clean) do
     saved_cwd = File.cwd!()
     cache_dir = System.get_env("FENNEC_CACHE_DIR", nil)
     if cache_dir do
@@ -85,21 +85,28 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
     app = get_app_name()
     do_fennec_precompile(app, args, targets, saved_cwd, cache_dir)
-    make_priv_dir(app, :clean)
-    with {:ok, target} <- FennecPrecompile.target(targets) do
-      tar_filename = "#{target}.tar.gz"
-      cached_tar_gz = Path.join([cache_dir, tar_filename])
-      FennecPrecompile.restore_nif_file(cached_tar_gz)
+    if post_clean do
+      make_priv_dir(app, :clean)
+    else
+      with {:ok, target} <- FennecPrecompile.target(targets) do
+        tar_filename = "#{target}.tar.gz"
+        cached_tar_gz = Path.join([cache_dir, tar_filename])
+        FennecPrecompile.restore_nif_file(cached_tar_gz, app)
+      end
     end
     Mix.Project.build_structure()
     :ok
   end
 
+  def build_native_using_zig(args) do
+    with {:ok, target} <- get_native_target() do
+      build_with_targets(args, [target], false)
+    end
+  end
+
   def build_native(args) do
     if always_use_zig?() do
-      with {:ok, target} <- get_native_target() do
-        build_with_targets(args, [target])
-      end
+      build_native_using_zig(args)
     else
       Mix.Tasks.Compile.ElixirMake.run(args)
     end
@@ -210,11 +217,12 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   defp app_priv(app) when is_atom(app) do
     build_path = Mix.Project.build_path()
-    Path.join([build_path, "#{app}", "priv"])
+    Path.join([build_path, "lib", "#{app}", "priv"])
   end
 
   defp make_priv_dir(app, :clean) when is_atom(app) do
-    File.rm_rf!(app_priv(app))
+    app_priv = app_priv(app)
+    File.rm_rf!(app_priv)
     make_priv_dir(app)
   end
 

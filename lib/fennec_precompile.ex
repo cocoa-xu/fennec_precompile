@@ -1,10 +1,53 @@
 defmodule FennecPrecompile do
   @moduledoc false
+
   defmacro __using__(opts) do
+    force =
+      if Code.ensure_loaded?(Mix.Tasks.Compile.ElixirMake) do
+        quote do
+          fn use_zig, args ->
+            if use_zig do
+              Mix.Tasks.Fennec.Precompile.build_native_using_zig(args)
+            else
+              Mix.Tasks.Compile.ElixirMake.run(args)
+            end
+          end
+        end
+      else
+        quote do
+          raise ":elixir_make dependency is needed to force the build. " <>
+                "Add it to your `mix.exs` file: `{:elixir_make, \">= 0.6\", optional: true}`"
+        end
+      end
+
     quote do
       require Logger
+
       opts = unquote(opts)
+      otp_app = Keyword.fetch!(opts, :otp_app)
+      user_config = Application.compile_env(:fennec_precompile, [:config, otp_app], [])
+      # always override using values from user (config/config.exs)
+      opts = Keyword.merge(opts, user_config, fn _, _dev, user -> user end)
+
       case FennecPrecompile.__using__(__MODULE__, opts) do
+        {:force_build, config} ->
+          force_build_fn = unquote(force)
+          :ok = force_build_fn.(config.force_build_using_zig, config.force_build_args)
+
+          @on_load :load_fennec_precompile
+          @fennec_precompiled_load_data config.load_data
+          @fennec_precompiled_nif_filename config.nif_filename
+          @fennec_precompiled_otp_app config.otp_app
+
+          @doc false
+          def load_fennec_precompile do
+            # Remove any old modules that may be loaded so we don't get
+            # {:error, {:upgrade, 'Upgrade not supported by this NIF library.'}}
+            :code.purge(__MODULE__)
+            load_path = '#{:code.priv_dir(@fennec_precompiled_otp_app)}/#{@fennec_precompiled_nif_filename}'
+            :erlang.load_nif(load_path, @fennec_precompiled_load_data)
+          end
+
         {:ok, config} ->
           @on_load :load_fennec_precompile
           @fennec_precompiled_load_data config.load_data
@@ -34,20 +77,24 @@ defmodule FennecPrecompile do
       |> Keyword.put_new(:module, module)
       |> FennecPrecompile.Config.new()
 
-    otp_app = config.otp_app
-    write_metadata_to_file(config)
-    load_path = "#{:code.priv_dir(otp_app)}/#{config.nif_filename}.so"
-    with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
-         {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
-      message = """
-      Error while downloading precompiled NIF: #{precomp_error}.
-      You can force the project to build from scratch with:
-          mix fennec.precompile
-      """
-
-      {:error, message}
+    if config.force_build == true do
+      {:force_build, config}
     else
-      _ -> {:ok, config}
+      otp_app = config.otp_app
+      write_metadata_to_file(config)
+      load_path = "#{:code.priv_dir(otp_app)}/#{config.nif_filename}.so"
+      with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
+          {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
+        message = """
+        Error while downloading precompiled NIF: #{precomp_error}.
+        You can force the project to build from scratch with:
+            mix fennec.precompile
+        """
+
+        {:error, message}
+      else
+        _ -> {:ok, config}
+      end
     end
   end
 
@@ -95,13 +142,13 @@ defmodule FennecPrecompile do
         with :ok <- File.mkdir_p(cache_dir),
              {:ok, tar_gz} <- download_tar_gz(config.base_url, tar_filename),
              :ok <- File.write(cached_tar_gz, tar_gz) do
-            Logger.debug("NIF cached at #{cached_tar_gz} and extracted to #{app_priv()}")
+            Logger.debug("NIF cached at #{cached_tar_gz} and extracted to #{app_priv(app)}")
         end
       end
 
       with {:file_exists, true} <- {:file_exists, File.exists?(cached_tar_gz)},
-           {:file_integrity, :ok} <- {:file_integrity, check_file_integrity(cached_tar_gz, config[:otp_app])},
-           {:restore_nif, :ok} <- {:restore_nif, restore_nif_file(cached_tar_gz)} do
+           {:file_integrity, :ok} <- {:file_integrity, check_file_integrity(cached_tar_gz, app)},
+           {:restore_nif, :ok} <- {:restore_nif, restore_nif_file(cached_tar_gz, app)} do
             {:ok, result}
       else
         {:file_exists, _} ->
@@ -114,9 +161,9 @@ defmodule FennecPrecompile do
     end
   end
 
-  def restore_nif_file(cached_tar_gz) do
+  def restore_nif_file(cached_tar_gz, app) do
     Logger.debug("Restore NIF for current node from: #{cached_tar_gz}")
-    :erl_tar.extract(cached_tar_gz, [:compressed, cwd: app_priv()])
+    :erl_tar.extract(cached_tar_gz, [:compressed, cwd: app_priv(app)])
   end
 
   @doc """
@@ -175,14 +222,12 @@ defmodule FennecPrecompile do
     to_string(uri)
   end
 
-  defp app_priv() do
-    app_priv(Mix.Project.config())
+  defp app_priv(%Config{} = config) do
+    :code.priv_dir(config.otp_app)
   end
 
-  defp app_priv(config) do
-      config
-      |> Mix.Project.app_path()
-      |> Path.join("priv")
+  defp app_priv(app) when is_atom(app) do
+    :code.priv_dir(app)
   end
 
   def cache_dir(sub_dir) do

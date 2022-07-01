@@ -12,7 +12,9 @@ defmodule FennecPrecompile.Config do
     :base_cache_dir,
     :load_data,
     :targets,
-    :always_use_zig
+    :force_build,
+    :force_build_args,
+    :force_build_using_zig,
   ]
 
   @default_targets_macos ~w(
@@ -63,7 +65,9 @@ defmodule FennecPrecompile.Config do
       load_data: opts[:load_data] || 0,
       base_cache_dir: opts[:base_cache_dir],
       targets: targets,
-      always_use_zig: opts[:always_use_zig] || false
+      force_build: pre_release?(version) or Keyword.fetch!(opts, :force_build),
+      force_build_args: opts[:force_build_args] || [],
+      force_build_using_zig: opts[:force_build_using_zig] || false
     }
   end
 
@@ -91,5 +95,9 @@ defmodule FennecPrecompile.Config do
 
   defp raise_for_nil_field_value(field) do
     raise "`#{inspect(field)}` is required for `FennecPrecompile`"
+  end
+
+  defp pre_release?(version) do
+    "dev" in Version.parse!(version).pre
   end
 end
