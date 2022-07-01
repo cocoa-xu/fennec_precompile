@@ -43,6 +43,7 @@ defmodule FennecPrecompile.MixProject do
   defp docs do
     [
       main: "Mix.Tasks.Fennec.Precompile",
+      extras: ["PRECOMPILATION_GUIDE.md"],
       source_ref: "v#{@version}",
       source_url: @github_url
     ]

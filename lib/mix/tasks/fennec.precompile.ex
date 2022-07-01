@@ -9,7 +9,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
   It helps by removing the need to have the C/C++ compiler and other dependencies
   installed in the user's machine.
 
-  Check the [precompilation_guild.md](https://github.com/cocoa-xu/fennec_precompile/blob/main/PRECOMPILATION_GUIDE.md) for details.
+  Check the [Precompilation Guide](PRECOMPILATION_GUIDE.md) for details.
 
   """
 
