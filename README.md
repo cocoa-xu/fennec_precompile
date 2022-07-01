@@ -129,9 +129,25 @@ cache_opts = if System.get_env("MIX_XDG"), do: %{os: :linux}, else: %{}
 ```
 
 ## Environment Variable
+- `FENNEC_CACHE_DIR`
+
+  This optional environment variable is used in both compile-time and runtime. It is used to specify the location of the cache directory.
+
+  During compile-time, the cache directory is used to store the precompiled binaries when running `mix fennec.precompile`. When running `mix fennec.fetch`, the cache directory is used to save the downloaded binaries.
+
+  In runtime, the cache directory is used to store the downloaded binaries.
+
+  For example,
+
+  ```shell
+  # store precompiled binaries in the "cache" subdirectory of the current directory
+  export FENNEC_CACHE_DIR="$(pwd)/cache"
+  mix fennec.precompile
+  ```
+
 - `FENNEC_PRECOMPILE_TARGETS`
   
-  Only used when running `mix fennec.precompile`. 
+  Only used when running `mix fennec.precompile`. This environment variable is mostly used in CI or temporarily  specify the target(s) to compile. 
   
   It is a comma separated list of targets to compile. For example,
   
@@ -139,6 +155,29 @@ cache_opts = if System.get_env("MIX_XDG"), do: %{os: :linux}, else: %{}
   export FENNEC_PRECOMPILE_TARGETS="aarch64-linux-musl,riscv64-linux-musl"
   mix fennec.precompile
   ```
+
+  If `FENNEC_PRECOMPILE_TARGETS` is not set, the `fennec_precompile` will then check `config/config.exs` to see if there is a `:targets` key for `my_app`. If there is, the value of the key will be the targets.
+
+  ```elixir
+  import Config
+
+  config :fennec_precompile, :config, my_app: [
+    targets: ["aarch64-linux-musl", "riscv64-linux-musl"]
+  ]
+  ```
+
+  Please note that setting `:targets` in the `use`-clause is only visible to the runtime and is invisble to the `mix fennec.precompile` command. 
+
+  ```elixir
+    use FennecPrecompile,
+      # ...
+      targets: ["aarch64-linux-musl", "riscv64-linux-musl"]
+  ```
+
+  `:targets` in the `use`-clause will only be used in the following cases:
+
+    1. `:force_build` is set to `true`. In this case, the `:targets` acts as a list of compatible targets in terms of the source code. For example, NIFs that are specifically written for ARM64 Linux will fail to compile for other OS or CPU architeture. If the source code is not compatible with the current node, the build will fail.
+    2. `:force_build` is set to `false`. In this case, the `:targets` acts as a list of available targets of the precompiled binaries. If there is no match with the current node, no precompiled NIF will be downloaded and the app will fail to start.
 
 - `FENNEC_PRECOMPILE_ALWAYS_USE_ZIG`
 
@@ -154,22 +193,6 @@ cache_opts = if System.get_env("MIX_XDG"), do: %{os: :linux}, else: %{}
   # this will force using zig as the compiler
   export FENNEC_PRECOMPILE_ALWAYS_USE_ZIG=true
   mix compile
-  ```
-
-- `FENNEC_CACHE_DIR`
-
-  This optional environment variable is used in both compile-time and runtime. It is used to specify the location of the cache directory.
-
-  During compile-time, the cache directory is used to store the precompiled binaries when running `mix fennec.precompile`. When running `mix fennec.fetch`, the cache directory is used to save the downloaded binaries.
-
-  In runtime, the cache directory is used to store the downloaded binaries.
-
-  For example,
-
-  ```shell
-  # store precompiled binaries in the "cache" subdirectory of the current directory
-  export FENNEC_CACHE_DIR="$(pwd)/cache"
-  mix fennec.precompile
   ```
 
 - `FENNEC_PRECOMPILE_OTP_APP`

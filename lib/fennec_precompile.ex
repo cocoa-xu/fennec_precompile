@@ -1,5 +1,97 @@
 defmodule FennecPrecompile do
-  @moduledoc false
+  @moduledoc """
+  Drop-in library for `:elixir_make` for precompiling and using precompiled NIF
+  binaries.
+
+  ## Example
+
+      defmodule MyNative do
+        use FennecPrecompile,
+          otp_app: Mix.Project.config()[:app],
+          version: "0.1.0",
+          base_url: "https://github.com/me/my_project/releases/download/v0.1.0",
+          nif_filename: "native_nif",
+          force_build: false
+      end
+
+  ## Options
+    - `:otp_app`. Required.
+
+      Specifies the name of the app.
+
+    - `:version`. Optional.
+
+      Defaults to `Mix.Project.config()[:version]`.
+
+      Specifies the version of the app.
+
+    - `:base_url`. Required.
+
+      Specifies the base download URL of the precompiled binaries.
+
+    - `:nif_filename`. Required.
+
+      Specifies the name of the precompiled binary file, excluding the file extension.
+
+    - `:force_build`. Required.
+
+      Indicates whether to force the app to be built.
+
+      The value of this option will always be `true` for pre-releases (like "2.1.0-dev").
+
+      When this value is `false` and there are no local or remote precompiled binaries,
+      a compilation error will be raised.
+
+    - `:force_build_args`. Optional.
+
+      Defaults to `[]`.
+
+      This option will be used when `:force_build` is `true`. The optional compiliation
+      args will be forwarded to `:elixir_make`.
+
+    - `:force_build_using_zig`. Optional.
+
+      Defaults to `false`.
+
+      This option will be used when `:force_build` is `true`. Set this option to `true`
+      to always using `zig` as the C/C++ compiler.
+
+    - `:targets`. Optional.
+
+      A list of targets [supported by Zig](https://ziglang.org/learn/overview/#support-table)
+      for which precompiled assets are avilable. By default the following targets are
+      configured:
+
+      ### on macOS
+        - `x86_64-macos`
+        - `x86_64-linux-gnu`
+        - `x86_64-linux-musl`
+        - `x86_64-windows-gnu`
+        - `aarch64-macos`
+        - `aarch64-linux-gnu`
+        - `aarch64-linux-musl`
+        - `riscv64-linux-musl`
+
+      ### on Linux
+        - `x86_64-linux-gnu`
+        - `x86_64-linux-musl`
+        - `x86_64-windows-gnu`
+        - `aarch64-linux-gnu`
+        - `aarch64-linux-musl`
+        - `riscv64-linux-musl`
+
+      `:targets` in the `use`-clause will only be used in the following cases:
+
+        1. `:force_build` is set to `true`. In this case, the `:targets` acts
+          as a list of compatible targets in terms of the source code. For example,
+          NIFs that are specifically written for ARM64 Linux will fail to compile
+          for other OS or CPU architeture. If the source code is not compatible with
+          the current node, the build will fail.
+        2. `:force_build` is set to `false`. In this case, the `:targets` acts as
+          a list of available targets of the precompiled binaries. If there is no
+          match with the current node, no precompiled NIF will be downloaded and
+          the app will fail to start.
+  """
 
   defmacro __using__(opts) do
     force =
@@ -32,20 +124,24 @@ defmodule FennecPrecompile do
       case FennecPrecompile.__using__(__MODULE__, opts) do
         {:force_build, config} ->
           force_build_fn = unquote(force)
-          :ok = force_build_fn.(config.force_build_using_zig, config.force_build_args)
+          with {:ok, []} <- force_build_fn.(config.force_build_using_zig, config.force_build_args) do
 
-          @on_load :load_fennec_precompile
-          @fennec_precompiled_load_data config.load_data
-          @fennec_precompiled_nif_filename config.nif_filename
-          @fennec_precompiled_otp_app config.otp_app
+            @on_load :load_fennec_precompile
+            @fennec_precompiled_load_data config.load_data
+            @fennec_precompiled_nif_filename config.nif_filename
+            @fennec_precompiled_otp_app config.otp_app
 
-          @doc false
-          def load_fennec_precompile do
-            # Remove any old modules that may be loaded so we don't get
-            # {:error, {:upgrade, 'Upgrade not supported by this NIF library.'}}
-            :code.purge(__MODULE__)
-            load_path = '#{:code.priv_dir(@fennec_precompiled_otp_app)}/#{@fennec_precompiled_nif_filename}'
-            :erlang.load_nif(load_path, @fennec_precompiled_load_data)
+            @doc false
+            def load_fennec_precompile do
+              # Remove any old modules that may be loaded so we don't get
+              # {:error, {:upgrade, 'Upgrade not supported by this NIF library.'}}
+              :code.purge(__MODULE__)
+              load_path = '#{:code.priv_dir(@fennec_precompiled_otp_app)}/#{@fennec_precompiled_nif_filename}'
+              :erlang.load_nif(load_path, @fennec_precompiled_load_data)
+            end
+          else
+            {:error, error} ->
+              raise RuntimeError, "#{inspect(error)}"
           end
 
         {:ok, config} ->
@@ -248,7 +344,7 @@ defmodule FennecPrecompile do
   This function is translating and adding more info to the system
   architecture returned by Elixir/Erlang to one used by Zig.
   The returned string has the following format:
-      "APP-nif-NIF_VERSION-ARCHITECTURE-OS-ABI-APP_VERSION"
+      "ARCHITECTURE-OS-ABI"
   ## Examples
       iex> FennecPrecompile.target()
       {:ok, "x86_64-linux-gnu"}

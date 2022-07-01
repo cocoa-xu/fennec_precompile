@@ -4,17 +4,17 @@ defmodule FennecPrecompile.Config do
   # This is an internal struct to represent valid config options.
   defstruct [
     :otp_app,
+    :version,
+    :base_url,
     :nif_filename,
     :nif_version,
-    :module,
-    :base_url,
-    :version,
+    :force_build,
+    :targets,
     :base_cache_dir,
     :load_data,
-    :targets,
-    :force_build,
     :force_build_args,
     :force_build_using_zig,
+    :module,
   ]
 
   @default_targets_macos ~w(
