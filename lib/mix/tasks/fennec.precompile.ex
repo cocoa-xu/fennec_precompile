@@ -1,78 +1,115 @@
 defmodule Mix.Tasks.Fennec.Precompile do
   @moduledoc """
   Download and use precompiled NIFs safely with checksums.
+
   Fennec Precompile is a tool for library maintainers that use `:elixir_make`
   and wish to ship precompiled binaries. This tool aims to be a drop-in
   replacement for `:elixir_make`.
+
   It helps by removing the need to have the C/C++ compiler and other dependencies
   installed in the user's machine.
-  Check the [README.md](https://github.com/cocoa-xu/fennec_precompile/blob/main/README.md) for details.
-  ## Example
-      defmodule MyNative do
-        use FennecPrecompile,
-          base_url: "https://github.com/me/my_project/releases/download/v0.1.0",
-          version: "0.1.0"
-      end
-  ## Options
-    * `:base_url` - A valid URL that is used as base path for the NIF file.
-    * `:version` - The version of precompiled assets (it is part of the NIF filename).
-    * `:targets` - A list of targets [supported by
-      Zig](https://ziglang.org/learn/overview/#support-table) for which
-      precompiled assets are avilable. By default the following targets are
-      configured:
 
-      - `x86_64-macos`
-      - `x86_64-linux-gnu`
-      - `x86_64-linux-musl`
-      - `x86_64-windows-gnu`
-      - `aarch64-macos`
-      - `aarch64-linux-gnu`
-      - `aarch64-linux-musl`
-      - `riscv64-linux-musl`
+  Check the [Precompilation Guide](PRECOMPILATION_GUIDE.md) for details.
 
   """
 
   use Mix.Task
   require Logger
 
+  @user_config Application.compile_env(:fennec_precompile, :config, [])
+  @return if Version.match?(System.version(), "~> 1.9"), do: {:ok, []}, else: :ok
+
   @impl true
   def run(args) do
+    build_with_targets(args, compile_targets(), true)
+  end
+
+  def build_with_targets(args, targets, post_clean) do
     saved_cwd = File.cwd!()
     cache_dir = System.get_env("FENNEC_CACHE_DIR", nil)
     if cache_dir do
       System.put_env("FENNEC_CACHE_DIR", cache_dir)
     end
     cache_dir = FennecPrecompile.cache_dir("")
-    targets = compile_targets()
-    do_fennec_precompile(args, targets, saved_cwd, cache_dir)
-    make_priv_dir(:clean)
-    with {:ok, target} <- FennecPrecompile.target(targets) do
-      tar_filename = "#{target}.tar.gz"
-      cached_tar_gz = Path.join([cache_dir, tar_filename])
-      FennecPrecompile.restore_nif_file(cached_tar_gz)
+
+    app = get_app_name()
+    do_fennec_precompile(app, args, targets, saved_cwd, cache_dir)
+    if post_clean do
+      make_priv_dir(app, :clean)
+    else
+      with {:ok, target} <- FennecPrecompile.target(targets) do
+        tar_filename = "#{target}.tar.gz"
+        cached_tar_gz = Path.join([cache_dir, tar_filename])
+        FennecPrecompile.restore_nif_file(cached_tar_gz, app)
+      end
     end
-
     Mix.Project.build_structure()
-
-    :ok
+    @return
   end
 
+  def build_native_using_zig(args) do
+    with {:ok, target} <- get_native_target() do
+      build_with_targets(args, [target], false)
+    end
+  end
+
+  def build_native(args) do
+    if always_use_zig?() do
+      build_native_using_zig(args)
+    else
+      Mix.Tasks.Compile.ElixirMake.run(args)
+    end
+  end
+
+  defp get_native_target() do
+    with {:ok, targets} <- FennecPrecompile.target(FennecPrecompile.Config.default_targets()) do
+      {:ok, targets}
+    else
+      _ ->
+        custom_native_target = System.get_env("FENNEC_PRECOMPILE_NATIVE_TARGET")
+        if custom_native_target == nil do
+          raise RuntimeError, "Cannot identify triplets for native target"
+        else
+          {:ok, custom_native_target}
+        end
+    end
+  end
+
+  defp always_use_zig?() do
+    always_use_zig?(System.get_env("FENNEC_PRECOMPILE_ALWAYS_USE_ZIG", "NO"))
+  end
+
+  defp always_use_zig?("true"), do: true
+  defp always_use_zig?("TRUE"), do: true
+  defp always_use_zig?("YES"), do: true
+  defp always_use_zig?("yes"), do: true
+  defp always_use_zig?("y"), do: true
+  defp always_use_zig?("on"), do: true
+  defp always_use_zig?("ON"), do: true
+  defp always_use_zig?(_), do: false
+
   defp compile_targets() do
-    targets = System.get_env("FENNEC_TARGETS")
+    targets = System.get_env("FENNEC_PRECOMPILE_TARGETS")
     if targets do
       String.split(targets, ",", trim: true)
     else
-      FennecPrecompile.Config.default_targets()
+      app = get_app_name()
+      user_targets = Keyword.get(Keyword.get(@user_config, app, []), :targets)
+      if user_targets != nil do
+        user_targets
+      else
+        FennecPrecompile.Config.default_targets()
+      end
     end
   end
 
-  defp do_fennec_precompile(args, targets, saved_cwd, cache_dir) do
+  defp do_fennec_precompile(app, args, targets, saved_cwd, cache_dir) do
     saved_cc = System.get_env("CC") || ""
     saved_cxx = System.get_env("CXX") || ""
     saved_cpp = System.get_env("CPP") || ""
 
-    checksums = fennec_precompile(args, targets, cache_dir)
-    FennecPrecompile.write_checksum!(checksums)
+    checksums = fennec_precompile(app, args, targets, cache_dir)
+    FennecPrecompile.write_checksum!(app, checksums)
 
     File.cd!(saved_cwd)
     System.put_env("CC", saved_cc)
@@ -80,10 +117,10 @@ defmodule Mix.Tasks.Fennec.Precompile do
     System.put_env("CPP", saved_cpp)
   end
 
-  defp fennec_precompile(args, targets, cache_dir) do
+  defp fennec_precompile(app, args, targets, cache_dir) do
     Enum.reduce(targets, [], fn target, checksums ->
       Logger.debug("Current compiling target: #{target}")
-      make_priv_dir(:clean)
+      make_priv_dir(app, :clean)
       {cc, cxx} =
         case {:os.type(), target} do
           {{:unix, :darwin}, "x86_64-macos" <> _} ->
@@ -106,12 +143,14 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   defp create_precompiled_archive(target, cache_dir) do
     saved_cwd = File.cwd!()
-    app_priv = app_priv()
+    app = get_app_name()
+    version = get_app_version()
+
+    app_priv = app_priv(app)
     File.cd!(app_priv)
     nif_version = FennecPrecompile.current_nif_version()
-    app = Mix.Project.config()[:app]
-    version = Mix.Project.config()[:version]
-    archive_filename = "#{to_string(app)}-nif-#{nif_version}-#{target}-#{version}"
+
+    archive_filename = "#{app}-nif-#{nif_version}-#{target}-#{version}"
     archive_tar_gz = "#{archive_filename}.tar.gz"
     archive_full_path = Path.expand(Path.join([cache_dir, archive_tar_gz]))
     Logger.debug("Creating precompiled archive: #{archive_full_path}")
@@ -122,22 +161,27 @@ defmodule Mix.Tasks.Fennec.Precompile do
     {archive_full_path, archive_tar_gz}
   end
 
-  defp app_priv() do
-    app_priv(Mix.Project.config())
+  defp get_app_name() do
+    System.get_env("FENNEC_PRECOMPILE_OTP_APP", "#{Mix.Project.config()[:app]}")
+    |> String.to_atom()
   end
 
-  defp app_priv(config) do
-      config
-      |> Mix.Project.app_path()
-      |> Path.join("priv")
+  defp get_app_version() do
+    System.get_env("FENNEC_PRECOMPILE_VERSION", "#{Mix.Project.config()[:version]}")
   end
 
-  defp make_priv_dir(:clean) do
-    File.rm_rf(app_priv())
-    make_priv_dir()
+  defp app_priv(app) when is_atom(app) do
+    build_path = Mix.Project.build_path()
+    Path.join([build_path, "lib", "#{app}", "priv"])
   end
 
-  defp make_priv_dir() do
-    File.mkdir_p!(app_priv())
+  defp make_priv_dir(app, :clean) when is_atom(app) do
+    app_priv = app_priv(app)
+    File.rm_rf!(app_priv)
+    make_priv_dir(app)
+  end
+
+  defp make_priv_dir(app) when is_atom(app) do
+    File.mkdir_p!(app_priv(app))
   end
 end

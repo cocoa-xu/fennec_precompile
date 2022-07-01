@@ -1,22 +1,161 @@
 defmodule FennecPrecompile do
-  @moduledoc false
+  @moduledoc """
+  Drop-in library for `:elixir_make` for precompiling and using precompiled NIF
+  binaries.
+
+  ## Example
+
+      defmodule MyNative do
+        use FennecPrecompile,
+          otp_app: Mix.Project.config()[:app],
+          version: "0.1.0",
+          base_url: "https://github.com/me/my_project/releases/download/v0.1.0",
+          nif_filename: "native_nif",
+          force_build: false
+      end
+
+  ## Options
+    - `:otp_app`. Required.
+
+      Specifies the name of the app.
+
+    - `:version`. Optional.
+
+      Defaults to `Mix.Project.config()[:version]`.
+
+      Specifies the version of the app.
+
+    - `:base_url`. Required.
+
+      Specifies the base download URL of the precompiled binaries.
+
+    - `:nif_filename`. Required.
+
+      Specifies the name of the precompiled binary file, excluding the file extension.
+
+    - `:force_build`. Required.
+
+      Indicates whether to force the app to be built.
+
+      The value of this option will always be `true` for pre-releases (like "2.1.0-dev").
+
+      When this value is `false` and there are no local or remote precompiled binaries,
+      a compilation error will be raised.
+
+    - `:force_build_args`. Optional.
+
+      Defaults to `[]`.
+
+      This option will be used when `:force_build` is `true`. The optional compiliation
+      args will be forwarded to `:elixir_make`.
+
+    - `:force_build_using_zig`. Optional.
+
+      Defaults to `false`.
+
+      This option will be used when `:force_build` is `true`. Set this option to `true`
+      to always using `zig` as the C/C++ compiler.
+
+    - `:targets`. Optional.
+
+      A list of targets [supported by Zig](https://ziglang.org/learn/overview/#support-table)
+      for which precompiled assets are avilable. By default the following targets are
+      configured:
+
+      ### on macOS
+        - `x86_64-macos`
+        - `x86_64-linux-gnu`
+        - `x86_64-linux-musl`
+        - `x86_64-windows-gnu`
+        - `aarch64-macos`
+        - `aarch64-linux-gnu`
+        - `aarch64-linux-musl`
+        - `riscv64-linux-musl`
+
+      ### on Linux
+        - `x86_64-linux-gnu`
+        - `x86_64-linux-musl`
+        - `x86_64-windows-gnu`
+        - `aarch64-linux-gnu`
+        - `aarch64-linux-musl`
+        - `riscv64-linux-musl`
+
+      `:targets` in the `use`-clause will only be used in the following cases:
+
+        1. `:force_build` is set to `true`. In this case, the `:targets` acts
+          as a list of compatible targets in terms of the source code. For example,
+          NIFs that are specifically written for ARM64 Linux will fail to compile
+          for other OS or CPU architeture. If the source code is not compatible with
+          the current node, the build will fail.
+        2. `:force_build` is set to `false`. In this case, the `:targets` acts as
+          a list of available targets of the precompiled binaries. If there is no
+          match with the current node, no precompiled NIF will be downloaded and
+          the app will fail to start.
+  """
+
   defmacro __using__(opts) do
+    force =
+      if Code.ensure_loaded?(Mix.Tasks.Compile.ElixirMake) do
+        quote do
+          fn use_zig, args ->
+            if use_zig do
+              Mix.Tasks.Fennec.Precompile.build_native_using_zig(args)
+            else
+              Mix.Tasks.Compile.ElixirMake.run(args)
+            end
+          end
+        end
+      else
+        quote do
+          raise ":elixir_make dependency is needed to force the build. " <>
+                "Add it to your `mix.exs` file: `{:elixir_make, \">= 0.6\", optional: true}`"
+        end
+      end
+
     quote do
       require Logger
+
       opts = unquote(opts)
-      otp_app = Mix.Project.config()[:app]
+      otp_app = Keyword.fetch!(opts, :otp_app)
+      user_config = Application.compile_env(:fennec_precompile, [:config, otp_app], [])
+      # always override using values from user (config/config.exs)
+      opts = Keyword.merge(opts, user_config, fn _, _dev, user -> user end)
+
       case FennecPrecompile.__using__(__MODULE__, opts) do
+        {:force_build, config} ->
+          force_build_fn = unquote(force)
+          with {:ok, []} <- force_build_fn.(config.force_build_using_zig, config.force_build_args) do
+
+            @on_load :load_fennec_precompile
+            @fennec_precompiled_load_data config.load_data
+            @fennec_precompiled_nif_filename config.nif_filename
+            @fennec_precompiled_otp_app config.otp_app
+
+            @doc false
+            def load_fennec_precompile do
+              # Remove any old modules that may be loaded so we don't get
+              # {:error, {:upgrade, 'Upgrade not supported by this NIF library.'}}
+              :code.purge(__MODULE__)
+              load_path = '#{:code.priv_dir(@fennec_precompiled_otp_app)}/#{@fennec_precompiled_nif_filename}'
+              :erlang.load_nif(load_path, @fennec_precompiled_load_data)
+            end
+          else
+            {:error, error} ->
+              raise RuntimeError, "#{inspect(error)}"
+          end
+
         {:ok, config} ->
           @on_load :load_fennec_precompile
           @fennec_precompiled_load_data config.load_data
           @fennec_precompiled_nif_filename config.nif_filename
+          @fennec_precompiled_otp_app config.otp_app
 
           @doc false
           def load_fennec_precompile do
             # Remove any old modules that may be loaded so we don't get
             # {:error, {:upgrade, 'Upgrade not supported by this NIF library.'}}
             :code.purge(__MODULE__)
-            load_path = '#{:code.priv_dir(Mix.Project.config()[:app])}/#{@fennec_precompiled_nif_filename}'
+            load_path = '#{:code.priv_dir(@fennec_precompiled_otp_app)}/#{@fennec_precompiled_nif_filename}'
             :erlang.load_nif(load_path, @fennec_precompiled_load_data)
           end
 
@@ -34,19 +173,24 @@ defmodule FennecPrecompile do
       |> Keyword.put_new(:module, module)
       |> FennecPrecompile.Config.new()
 
-    write_metadata_to_file(config)
-    load_path = "#{:code.priv_dir(Mix.Project.config()[:app])}/#{config.nif_filename}.so"
-    with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
-         {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
-      message = """
-      Error while downloading precompiled NIF: #{precomp_error}.
-      You can force the project to build from scratch with:
-          mix fennec.precompile
-      """
-
-      {:error, message}
+    if config.force_build == true do
+      {:force_build, config}
     else
-      _ -> {:ok, config}
+      otp_app = config.otp_app
+      write_metadata_to_file(config)
+      load_path = "#{:code.priv_dir(otp_app)}/#{config.nif_filename}.so"
+      with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
+          {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
+        message = """
+        Error while downloading precompiled NIF: #{precomp_error}.
+        You can force the project to build from scratch with:
+            mix fennec.precompile
+        """
+
+        {:error, message}
+      else
+        _ -> {:ok, config}
+      end
     end
   end
 
@@ -58,7 +202,7 @@ defmodule FennecPrecompile do
   @checksum_algorithms [@checksum_algo]
 
   def write_metadata_to_file(%Config{} = config) do
-    app = Mix.Project.config()[:app]
+    app = config.otp_app
 
     with {:ok, target} <- target(config.targets) do
       metadata = %{
@@ -80,7 +224,9 @@ defmodule FennecPrecompile do
     cache_dir = cache_dir("")
 
     with {:ok, target} <- target(config.targets) do
-      tar_filename = "#{target}.tar.gz"
+      app = config.otp_app
+      version = config.version
+      tar_filename = "#{app}-nif-#{config.nif_version}-#{target}-#{version}.tar.gz"
       cached_tar_gz = Path.join([cache_dir, tar_filename])
 
       result = %{
@@ -92,13 +238,13 @@ defmodule FennecPrecompile do
         with :ok <- File.mkdir_p(cache_dir),
              {:ok, tar_gz} <- download_tar_gz(config.base_url, tar_filename),
              :ok <- File.write(cached_tar_gz, tar_gz) do
-            Logger.debug("NIF cached at #{cached_tar_gz} and extracted to #{app_priv()}")
+            Logger.debug("NIF cached at #{cached_tar_gz} and extracted to #{app_priv(app)}")
         end
       end
 
       with {:file_exists, true} <- {:file_exists, File.exists?(cached_tar_gz)},
-           {:file_integrity, :ok} <- {:file_integrity, check_file_integrity(cached_tar_gz)},
-           {:restore_nif, :ok} <- {:restore_nif, restore_nif_file(cached_tar_gz)} do
+           {:file_integrity, :ok} <- {:file_integrity, check_file_integrity(cached_tar_gz, app)},
+           {:restore_nif, :ok} <- {:restore_nif, restore_nif_file(cached_tar_gz, app)} do
             {:ok, result}
       else
         {:file_exists, _} ->
@@ -111,9 +257,9 @@ defmodule FennecPrecompile do
     end
   end
 
-  def restore_nif_file(cached_tar_gz) do
+  def restore_nif_file(cached_tar_gz, app) do
     Logger.debug("Restore NIF for current node from: #{cached_tar_gz}")
-    :erl_tar.extract(cached_tar_gz, [:compressed, cwd: app_priv()])
+    :erl_tar.extract(cached_tar_gz, [:compressed, cwd: app_priv(app)])
   end
 
   @doc """
@@ -172,14 +318,12 @@ defmodule FennecPrecompile do
     to_string(uri)
   end
 
-  defp app_priv() do
-    app_priv(Mix.Project.config())
+  defp app_priv(%Config{} = config) do
+    :code.priv_dir(config.otp_app)
   end
 
-  defp app_priv(config) do
-      config
-      |> Mix.Project.app_path()
-      |> Path.join("priv")
+  defp app_priv(app) when is_atom(app) do
+    :code.priv_dir(app)
   end
 
   def cache_dir(sub_dir) do
@@ -200,12 +344,12 @@ defmodule FennecPrecompile do
   This function is translating and adding more info to the system
   architecture returned by Elixir/Erlang to one used by Zig.
   The returned string has the following format:
-      "APP-nif-NIF_VERSION-ARCHITECTURE-OS-ABI-APP_VERSION"
+      "ARCHITECTURE-OS-ABI"
   ## Examples
       iex> FennecPrecompile.target()
-      {:ok, "fennec-nif-2.16-x86_64-linux-gnu-0.1.0"}
+      {:ok, "x86_64-linux-gnu"}
       iex> FennecPrecompile.target()
-      {:ok, "fennec-nif-2.16-aarch64-macos-0.1.0"}
+      {:ok, "aarch64-macos"}
   """
   def target(config \\ target_config(), available_targets) do
     arch_os =
@@ -262,9 +406,7 @@ defmodule FennecPrecompile do
            "The available NIF versions are:\n - #{Enum.join(@available_nif_versions, "\n - ")}"}
 
       true ->
-        app = to_string(Mix.Project.config()[:app])
-        version = Mix.Project.config()[:version]
-        {:ok, "#{app}-nif-#{config.nif_version}-#{arch_os}-#{version}"}
+        {:ok, arch_os}
     end
   end
 
@@ -526,13 +668,13 @@ defmodule FennecPrecompile do
     |> List.last()
   end
 
-  defp checksum_map() do
-    checksum_file()
+  defp checksum_map(otp_app) when is_atom(otp_app) do
+    checksum_file(otp_app)
     |> read_map_from_file()
   end
 
-  defp check_file_integrity(file_path) do
-    checksum_map()
+  defp check_file_integrity(file_path, otp_app) when is_atom(otp_app) do
+    checksum_map(otp_app)
     |> check_integrity_from_map(file_path)
   end
 
@@ -606,8 +748,8 @@ defmodule FennecPrecompile do
   # Write the checksum file with all NIFs available.
   # It receives the module name and checksums.
   @doc false
-  def write_checksum!(checksums) do
-    file = checksum_file()
+  def write_checksum!(app, checksums) do
+    file = checksum_file(app)
 
     pairs =
       for %{path: path, checksum: checksum, checksum_algo: algo} <- checksums, into: %{} do
@@ -624,8 +766,8 @@ defmodule FennecPrecompile do
     File.write!(file, ["%{\n", lines, "}\n"])
   end
 
-  def checksum_file() do
+  def checksum_file(otp_app) when is_atom(otp_app) do
     # Saves the file in the project root.
-    Path.join(File.cwd!(), "checksum-#{Mix.Project.config()[:app]}.exs")
+    Path.join(File.cwd!(), "checksum-#{to_string(otp_app)}.exs")
   end
 end
