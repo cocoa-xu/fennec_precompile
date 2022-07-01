@@ -3,16 +3,19 @@ defmodule FennecPrecompile.Config do
 
   # This is an internal struct to represent valid config options.
   defstruct [
+    :otp_app,
     :nif_filename,
+    :nif_version,
     :module,
     :base_url,
     :version,
     :base_cache_dir,
     :load_data,
-    :targets
+    :targets,
+    :always_use_zig
   ]
 
-  @default_targets ~w(
+  @default_targets_macos ~w(
     x86_64-macos
     x86_64-linux-gnu
     x86_64-linux-musl
@@ -23,21 +26,44 @@ defmodule FennecPrecompile.Config do
     riscv64-linux-musl
   )
 
-  def default_targets, do: @default_targets
+  @default_targets_linux ~w(
+    x86_64-linux-gnu
+    x86_64-linux-musl
+    x86_64-windows-gnu
+    aarch64-linux-gnu
+    aarch64-linux-musl
+    riscv64-linux-musl
+  )
+
+  def default_targets_macos, do: @default_targets_macos
+  def default_targets_linux, do: @default_targets_linux
+  def default_targets, do: Enum.uniq(default_targets_macos() ++ default_targets_linux())
 
   def new(opts) do
     version = Keyword.fetch!(opts, :version)
     base_url = opts |> Keyword.fetch!(:base_url) |> validate_base_url!()
-    targets = opts |> Keyword.get(:targets, @default_targets) |> validate_targets!()
+    targets = opts |> Keyword.get(:targets, default_targets()) |> validate_targets!()
+    nif_version = opts |> Keyword.get(:nif_version, "#{:erlang.system_info(:nif_version)}")
+    otp_app =
+      case opts[:otp_app] do
+        nil -> Mix.Project.config()[:app]
+        "" -> Mix.Project.config()[:app]
+        otp_app when is_atom(otp_app) -> otp_app
+        otp_app when is_binary(otp_app) -> String.to_atom(otp_app)
+        _ -> raise RuntimeError, "Invalid value for :otp_app"
+      end
 
     %__MODULE__{
+      otp_app: otp_app,
       base_url: base_url,
       module: Keyword.fetch!(opts, :module),
       version: version,
       nif_filename: opts[:nif_filename] || to_string(Mix.Project.config()[:app]),
+      nif_version: nif_version,
       load_data: opts[:load_data] || 0,
       base_cache_dir: opts[:base_cache_dir],
-      targets: targets
+      targets: targets,
+      always_use_zig: opts[:always_use_zig] || false
     }
   end
 

@@ -30,7 +30,7 @@ defmodule Mix.Tasks.Fennec.Fetch do
 
   @impl true
   def run(flags) when is_list(flags) do
-    app = Mix.Project.config()[:app]
+    app = get_app_name()
 
     {options, _args, _invalid} = OptionParser.parse(flags, strict: @switches)
 
@@ -58,6 +58,11 @@ defmodule Mix.Tasks.Fennec.Fetch do
       |> IO.puts()
     end
 
-    FennecPrecompile.write_checksum!(result)
+    FennecPrecompile.write_checksum!(app, result)
+  end
+
+  defp get_app_name() do
+    System.get_env("FENNEC_PRECOMPILE_OTP_APP", "#{Mix.Project.config()[:app]}")
+    |> String.to_atom()
   end
 end

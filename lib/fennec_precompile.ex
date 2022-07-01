@@ -4,19 +4,19 @@ defmodule FennecPrecompile do
     quote do
       require Logger
       opts = unquote(opts)
-      otp_app = Mix.Project.config()[:app]
       case FennecPrecompile.__using__(__MODULE__, opts) do
         {:ok, config} ->
           @on_load :load_fennec_precompile
           @fennec_precompiled_load_data config.load_data
           @fennec_precompiled_nif_filename config.nif_filename
+          @fennec_precompiled_otp_app config.otp_app
 
           @doc false
           def load_fennec_precompile do
             # Remove any old modules that may be loaded so we don't get
             # {:error, {:upgrade, 'Upgrade not supported by this NIF library.'}}
             :code.purge(__MODULE__)
-            load_path = '#{:code.priv_dir(Mix.Project.config()[:app])}/#{@fennec_precompiled_nif_filename}'
+            load_path = '#{:code.priv_dir(@fennec_precompiled_otp_app)}/#{@fennec_precompiled_nif_filename}'
             :erlang.load_nif(load_path, @fennec_precompiled_load_data)
           end
 
@@ -34,8 +34,9 @@ defmodule FennecPrecompile do
       |> Keyword.put_new(:module, module)
       |> FennecPrecompile.Config.new()
 
+    otp_app = config.otp_app
     write_metadata_to_file(config)
-    load_path = "#{:code.priv_dir(Mix.Project.config()[:app])}/#{config.nif_filename}.so"
+    load_path = "#{:code.priv_dir(otp_app)}/#{config.nif_filename}.so"
     with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
          {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
       message = """
@@ -58,7 +59,7 @@ defmodule FennecPrecompile do
   @checksum_algorithms [@checksum_algo]
 
   def write_metadata_to_file(%Config{} = config) do
-    app = Mix.Project.config()[:app]
+    app = config.otp_app
 
     with {:ok, target} <- target(config.targets) do
       metadata = %{
@@ -80,7 +81,9 @@ defmodule FennecPrecompile do
     cache_dir = cache_dir("")
 
     with {:ok, target} <- target(config.targets) do
-      tar_filename = "#{target}.tar.gz"
+      app = config.otp_app
+      version = config.version
+      tar_filename = "#{app}-nif-#{config.nif_version}-#{target}-#{version}.tar.gz"
       cached_tar_gz = Path.join([cache_dir, tar_filename])
 
       result = %{
@@ -97,7 +100,7 @@ defmodule FennecPrecompile do
       end
 
       with {:file_exists, true} <- {:file_exists, File.exists?(cached_tar_gz)},
-           {:file_integrity, :ok} <- {:file_integrity, check_file_integrity(cached_tar_gz)},
+           {:file_integrity, :ok} <- {:file_integrity, check_file_integrity(cached_tar_gz, config[:otp_app])},
            {:restore_nif, :ok} <- {:restore_nif, restore_nif_file(cached_tar_gz)} do
             {:ok, result}
       else
@@ -203,9 +206,9 @@ defmodule FennecPrecompile do
       "APP-nif-NIF_VERSION-ARCHITECTURE-OS-ABI-APP_VERSION"
   ## Examples
       iex> FennecPrecompile.target()
-      {:ok, "fennec-nif-2.16-x86_64-linux-gnu-0.1.0"}
+      {:ok, "x86_64-linux-gnu"}
       iex> FennecPrecompile.target()
-      {:ok, "fennec-nif-2.16-aarch64-macos-0.1.0"}
+      {:ok, "aarch64-macos"}
   """
   def target(config \\ target_config(), available_targets) do
     arch_os =
@@ -262,9 +265,7 @@ defmodule FennecPrecompile do
            "The available NIF versions are:\n - #{Enum.join(@available_nif_versions, "\n - ")}"}
 
       true ->
-        app = to_string(Mix.Project.config()[:app])
-        version = Mix.Project.config()[:version]
-        {:ok, "#{app}-nif-#{config.nif_version}-#{arch_os}-#{version}"}
+        {:ok, arch_os}
     end
   end
 
@@ -526,13 +527,13 @@ defmodule FennecPrecompile do
     |> List.last()
   end
 
-  defp checksum_map() do
-    checksum_file()
+  defp checksum_map(otp_app) when is_atom(otp_app) do
+    checksum_file(otp_app)
     |> read_map_from_file()
   end
 
-  defp check_file_integrity(file_path) do
-    checksum_map()
+  defp check_file_integrity(file_path, otp_app) when is_atom(otp_app) do
+    checksum_map(otp_app)
     |> check_integrity_from_map(file_path)
   end
 
@@ -606,8 +607,8 @@ defmodule FennecPrecompile do
   # Write the checksum file with all NIFs available.
   # It receives the module name and checksums.
   @doc false
-  def write_checksum!(checksums) do
-    file = checksum_file()
+  def write_checksum!(app, checksums) do
+    file = checksum_file(app)
 
     pairs =
       for %{path: path, checksum: checksum, checksum_algo: algo} <- checksums, into: %{} do
@@ -624,8 +625,8 @@ defmodule FennecPrecompile do
     File.write!(file, ["%{\n", lines, "}\n"])
   end
 
-  def checksum_file() do
+  def checksum_file(otp_app) when is_atom(otp_app) do
     # Saves the file in the project root.
-    Path.join(File.cwd!(), "checksum-#{Mix.Project.config()[:app]}.exs")
+    Path.join(File.cwd!(), "checksum-#{to_string(otp_app)}.exs")
   end
 end
