@@ -24,3 +24,10 @@ fennec_precompile-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# macOS only
+.DS_Store
+
+# IDEs
+.idea/
+.vscode/
