@@ -38,7 +38,9 @@ defmodule Mix.Tasks.Fennec.Precompile do
       make_priv_dir(app, :clean)
     else
       with {:ok, target} <- FennecPrecompile.target(targets) do
-        tar_filename = "#{target}.tar.gz"
+        version = get_app_version()
+        nif_version = "#{:erlang.system_info(:nif_version)}"
+        tar_filename = "#{app}-nif-#{nif_version}-#{target}-#{version}.tar.gz"
         cached_tar_gz = Path.join([cache_dir, tar_filename])
         FennecPrecompile.restore_nif_file(cached_tar_gz, app)
       end
