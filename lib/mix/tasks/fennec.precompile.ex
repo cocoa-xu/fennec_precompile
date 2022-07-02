@@ -226,22 +226,62 @@ defmodule Mix.Tasks.Fennec.Precompile do
     File.mkdir_p!(cache_dir)
     Logger.debug("Creating precompiled archive: #{archive_full_path}")
 
-    czf = ["-czf", archive_full_path, "."]
-    with {_, 1} <- System.cmd("tar", ["--hole-detection=raw"] ++ czf) do
-      with {_, 0} <- System.cmd("tar", czf) do
-        :ok
-      else
-        {error, exit_code} ->
-          Logger.error("failed to create tar.gz file, tar exited with code: #{exit_code}: #{error}")
-      end
-    else
-      {_, 0} -> :ok
-      {error, exit_code} ->
-        Logger.error("failed to create tar.gz file, tar exited with code: #{exit_code}: #{error}")
-    end
+    filelist = build_file_list_at(app_priv)
+    File.cd!(app_priv)
+    :ok = :erl_tar.create(archive_full_path, filelist, [:compressed])
 
     File.cd!(saved_cwd)
     {archive_full_path, archive_tar_gz}
+  end
+
+  defp build_file_list_at(dir) do
+    saved_cwd = File.cwd!()
+    File.cd!(dir)
+    {filelist, _} = build_file_list_at(".", %{}, [])
+    File.cd!(saved_cwd)
+    Enum.map(filelist, &to_charlist/1)
+  end
+
+  defp build_file_list_at(dir, visited, filelist) do
+    visited? = Map.get(visited, dir)
+    if visited? do
+      {filelist, visited}
+    else
+      visited = Map.put(visited, dir, true)
+      saved_cwd = File.cwd!()
+
+      case {File.dir?(dir), File.read_link(dir)} do
+        {true, {:error, _}} ->
+          File.cd!(dir)
+          cur_filelist = File.ls!()
+          {files, folders} =
+            Enum.reduce(cur_filelist, {[], []}, fn filepath, {files, folders} ->
+              if File.dir?(filepath) do
+                symlink_dir? = Path.join([File.cwd!(), filepath])
+                case File.read_link(symlink_dir?) do
+                  {:error, _} ->
+                    {files, [filepath | folders]}
+                  {:ok, _} ->
+                    {[Path.join([dir, filepath]) | files], folders}
+                end
+              else
+                {[Path.join([dir, filepath]) | files], folders}
+              end
+            end)
+          File.cd!(saved_cwd)
+
+          filelist = files ++ filelist ++ [dir]
+          {files_in_folder, visited} =
+            Enum.reduce(folders, {[], visited}, fn folder_path, {files_in_folder, visited} ->
+              {filelist, visited} = build_file_list_at(Path.join([dir, folder_path]), visited, files_in_folder)
+              {files_in_folder ++ filelist, visited}
+            end)
+          filelist = filelist ++ files_in_folder
+          {filelist, visited}
+      _ ->
+        {filelist, visited}
+      end
+    end
   end
 
   defp get_app_name() do
