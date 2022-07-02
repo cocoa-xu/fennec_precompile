@@ -260,10 +260,10 @@ defmodule FennecPrecompile do
   def restore_nif_file(cached_tar_gz, app) do
     Logger.debug("Restore NIF for current node from: #{cached_tar_gz}")
     {:ok, files} = :erl_tar.extract(cached_tar_gz, [:compressed, :memory])
-    root = "#{app_priv(app)}"
+    root = to_string(app_priv(app))
 
     Enum.map(files, fn {filepath, data} ->
-      filepath = Regex.replace(~r/^.\/GNUSparseFile.[\d]+\//, filepath, "")
+      filepath = to_string(filepath)
       resolved_filepath = Path.expand(Path.join([root, filepath]))
       if String.starts_with?(resolved_filepath, root) do
         file_dir = Path.dirname(resolved_filepath)

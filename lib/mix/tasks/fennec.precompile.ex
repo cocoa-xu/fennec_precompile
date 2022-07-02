@@ -157,7 +157,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
     archive_full_path = Path.expand(Path.join([cache_dir, archive_tar_gz]))
     Logger.debug("Creating precompiled archive: #{archive_full_path}")
 
-    System.cmd("tar", ["-czf", archive_full_path, "."])
+    System.cmd("tar", ["-czf", "--hole-detection=raw", archive_full_path, "."])
 
     File.cd!(saved_cwd)
     {archive_full_path, archive_tar_gz}
