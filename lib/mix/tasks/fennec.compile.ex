@@ -1,4 +1,8 @@
 defmodule Mix.Tasks.Compile.FennecPrecompile do
+  @moduledoc """
+  Drop-in replacement of `:elixir_make`
+  """
+
   use Mix.Task
 
   @return if Version.match?(System.version(), "~> 1.9"), do: {:ok, []}, else: :ok

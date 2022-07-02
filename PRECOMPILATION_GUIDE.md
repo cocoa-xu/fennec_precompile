@@ -138,9 +138,7 @@ In the `mix.exs` file, we passed two options:
 - `:fennec_base_url`. Required. Specifies the base download URL of the precompiled binaries. 
 - `:fennec_nif_filename`. Required. Specifies the name of the precompiled binary file, excluding the file extension.
 
-- `:fennec_force_build`. Optional. Indicates whether to force the app to be built.
-
-In the example, `force_build` is to `false` to skip the build step by default. 
+For all available options, please refer to [Mix.Tasks.Fennec.Precompile](Mix.Tasks.Fennec.Precompile.html).
 
 All of these values can be overridden by the user in the `config/config.exs` file. For instance,
 
@@ -150,8 +148,8 @@ To avoid supply chain attack or to speed up the deployment, the user can redirec
 import Config
 
 config :fennec_precompile, :config, fennec_example: [
-    base_url: "https://cdn.example.com/fennec_example",
-    force_build: false
+    fennec_base_url: "https://cdn.example.com/fennec_example",
+    fennec_force_build: false
 ]
 ```
 
@@ -169,7 +167,7 @@ Of course, you can also use zig as the C/C++ compiler<sup>[1](#notes)</sup>.
 ```shell
 # set environment variable `FENNEC_PRECOMPILE_ALWAYS_USE_ZIG` to `true`
 $ export FENNEC_PRECOMPILE_ALWAYS_USE_ZIG=true
-$ mix compile.fennec_precompile
+$ mix compile
 
 20:42:07.566 [debug] Current compiling target: aarch64-macos
 gcc -arch arm64 -shared -std=c11 -O3 -fPIC -I/usr/local/lib/erlang/erts-13.0/include -undefined dynamic_lookup -flat_namespace -undefined suppress /Users/cocoa/Git/fennec_example/c_src/fennec_example.c -o /Users/cocoa/Git/fennec_example/_build/dev/lib/fennec_example/priv/nif.so
@@ -306,23 +304,27 @@ However, there is no need to track the checksum file in your version control sys
 ## Recommended flow
 To recap, the suggested flow is the following:
 
-1. Add `:fennec_precompile` to your `mix.exs`.
+1. Add `:fennec_precompile` and relevant `fennec_*` options to the `mix.exs`.
 2. (Optional) Test if your library compiles locally.
     ```shell
-    mix compile.fennec_precompile
+    mix compile
     ```
+
 3. (Optional) Test if your library can precompile to all specified targets locally.
     ```shell
     mix fennec.precompile
     ```
+
 4. Precompile your library on CI.
     ```shell
     git push origin main --tags
     ```
+
 5. Fetch precompiled binaries from GitHub.
     ```shell
     mix fennec.fetch --all --print
     ```
+
 6. Update Hex package to include the checksum file.
 7. Release the package to Hex.pm (make sure your release includes the correct files).
 

@@ -1,8 +1,5 @@
 defmodule FennecPrecompile do
-  @moduledoc """
-  Drop-in library for `:elixir_make` for precompiling and using precompiled NIF
-  binaries.
-  """
+  @moduledoc false
 
   alias FennecPrecompile.Config
   require Logger
