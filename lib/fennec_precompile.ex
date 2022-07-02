@@ -260,14 +260,21 @@ defmodule FennecPrecompile do
   def restore_nif_file(cached_tar_gz, app) do
     Logger.debug("Restore NIF for current node from: #{cached_tar_gz}")
     {:ok, files} = :erl_tar.extract(cached_tar_gz, [:compressed, :memory])
-    root = app_priv(app)
+    root = "#{app_priv(app)}"
+
     Enum.map(files, fn {filepath, data} ->
-      filepath = Path.join([root, filepath])
-      file_dir = Path.basename(filepath)
-      if !File.dir?(file_dir) do
+      resolved_filepath = Path.expand(Path.join([root, filepath]))
+      if String.starts_with?(resolved_filepath, root) do
+        file_dir = Path.dirname(resolved_filepath)
+        if File.exists?(file_dir) do
+          File.rm_rf!(file_dir)
+        end
         File.mkdir_p!(file_dir)
+        :ok = File.write!(resolved_filepath, data)
+      else
+        Logger.warn("Dangerous filepath in archive file. Path: '#{filepath}' resolves to '#{resolved_filepath}'")
+        :warn
       end
-      :ok = File.write!(filepath, data)
     end)
     |> Enum.all?()
   end
