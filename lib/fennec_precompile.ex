@@ -263,6 +263,7 @@ defmodule FennecPrecompile do
     root = "#{app_priv(app)}"
 
     Enum.map(files, fn {filepath, data} ->
+      filepath = Regex.replace(~r/^.\/GNUSparseFile.[\d]+\//, filepath, "")
       resolved_filepath = Path.expand(Path.join([root, filepath]))
       if String.starts_with?(resolved_filepath, root) do
         file_dir = Path.dirname(resolved_filepath)
