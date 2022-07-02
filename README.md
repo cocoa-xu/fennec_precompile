@@ -12,7 +12,7 @@ by adding `fennec_precompile` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:fennec_precompile, "~> 0.1.2"}
+    {:fennec_precompile, "~> 0.1.3"}
   ]
 end
 ```
