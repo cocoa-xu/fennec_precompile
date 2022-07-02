@@ -9,9 +9,10 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
   @return if Version.match?(System.version(), "~> 1.9"), do: {:ok, []}, else: :ok
 
   def run(args) do
+    app = get_app_name()
     config =
       Mix.Project.config()
-      |> Keyword.merge(@user_config, fn _key, _mix, user_config -> user_config end)
+      |> Keyword.merge(Keyword.get(@user_config, app, []), fn _key, _mix, user_config -> user_config end)
       |> FennecPrecompile.Config.new()
 
     if config.force_build == true do
@@ -35,5 +36,10 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
     end
 
     @return
+  end
+
+  defp get_app_name() do
+    System.get_env("FENNEC_PRECOMPILE_OTP_APP", "#{Mix.Project.config()[:app]}")
+    |> String.to_atom()
   end
 end
