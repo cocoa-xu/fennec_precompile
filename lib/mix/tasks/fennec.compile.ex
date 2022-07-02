@@ -5,11 +5,13 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
 
   use Mix.Task
 
+  @user_config Application.compile_env(:fennec_precompile, :config, [])
   @return if Version.match?(System.version(), "~> 1.9"), do: {:ok, []}, else: :ok
 
   def run(args) do
     config =
       Mix.Project.config()
+      |> Keyword.merge(@user_config, fn _key, _mix, user_config -> user_config end)
       |> FennecPrecompile.Config.new()
 
     if config.force_build == true do
