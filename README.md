@@ -22,13 +22,16 @@ and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/fennec_precompile>.
 
 ## Usage
-Replace the `:elixir_make` compiler with `:fennec_precompile` in the `compilers` section:
+Replace the `:elixir_make` compiler with `:fennec_precompile` in the `compilers` section, and set `fennec_base_url` to the base URL of the precompiled binaries.
 
 ```elixir
+@version "0.1.0"
 def project do
   [
     # ...
+    version: @version,
     compilers: [:fennec_precompile] ++ Mix.compilers(),
+    fennec_base_url: "https://github.com/me/myproject/downloads/releases/v#{@version}"
     # ...
   ]
 end
@@ -156,28 +159,28 @@ cache_opts = if System.get_env("MIX_XDG"), do: %{os: :linux}, else: %{}
   mix fennec.precompile
   ```
 
-  If `FENNEC_PRECOMPILE_TARGETS` is not set, the `fennec_precompile` will then check `config/config.exs` to see if there is a `:targets` key for `my_app`. If there is, the value of the key will be the targets.
+  If `FENNEC_PRECOMPILE_TARGETS` is not set, the `fennec_precompile` will then check `config/config.exs` to see if there is a `:fennec_targets` key for `my_app`. If there is, the value of the key will be the targets.
 
   ```elixir
   import Config
 
   config :fennec_precompile, :config, my_app: [
-    targets: ["aarch64-linux-musl", "riscv64-linux-musl"]
+    fennec_targets: ["aarch64-linux-musl", "riscv64-linux-musl"]
   ]
   ```
 
-  Please note that setting `:targets` in the `use`-clause is only visible to the runtime and is invisble to the `mix fennec.precompile` command. 
-
+  `:fennec_targets` in the `project` will only be used in the following cases:
   ```elixir
-    use FennecPrecompile,
+  def project do
+    [
       # ...
-      targets: ["aarch64-linux-musl", "riscv64-linux-musl"]
+      fennec_targets: ["aarch64-linux-musl", "riscv64-linux-musl"]
+    ]
+  end
   ```
 
-  `:targets` in the `use`-clause will only be used in the following cases:
-
-    1. `:force_build` is set to `true`. In this case, the `:targets` acts as a list of compatible targets in terms of the source code. For example, NIFs that are specifically written for ARM64 Linux will fail to compile for other OS or CPU architeture. If the source code is not compatible with the current node, the build will fail.
-    2. `:force_build` is set to `false`. In this case, the `:targets` acts as a list of available targets of the precompiled binaries. If there is no match with the current node, no precompiled NIF will be downloaded and the app will fail to start.
+    1. When `:fennec_force_build` is set to `true`. In this case, the `:fennec_targets` acts as a list of compatible targets in terms of the source code. For example, NIFs that are specifically written for ARM64 Linux will fail to compile for other OS or CPU architeture. If the source code is not compatible with the current node, the build will fail.
+    2. When `:fennec_force_build` is set to `false`. In this case, the `:fennec_targets` acts as a list of available targets of the precompiled binaries. If there is no match with the current node, no precompiled NIF will be downloaded and the app will fail to start.
 
 - `FENNEC_PRECOMPILE_ALWAYS_USE_ZIG`
 
@@ -211,16 +214,6 @@ cache_opts = if System.get_env("MIX_XDG"), do: %{os: :linux}, else: %{}
   # overwrite default name with "app1"
   export FENNEC_PRECOMPILE_OTP_APP=app1
   mix fennec.precompile
-  ```
-
-  ```elixir
-  defmodule MyApp do
-    # `otp_app` should match the value of `FENNEC_PRECOMPILE_OTP_APP`
-    use FennecPrecompile,
-      otp_app: :app1,
-      base_url: "https://github.com/me/my_project/releases/download/v0.1.0",
-      version: "0.1.0"
-  end
   ```
 
 - `FENNEC_PRECOMPILE_VERSION`

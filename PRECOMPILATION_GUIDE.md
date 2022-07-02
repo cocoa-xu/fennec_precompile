@@ -38,10 +38,13 @@ In the `mix.exs` file, we add `:fennec_precompile` to `deps`. Also, note that `:
 defmodule FennecExample do
   use Mix.Project
 
+  @version "0.1.0"
   def project do
     [
         # ...
-        compilers: Mix.compilers()
+        compilers: [:fennec_precompile] ++ Mix.compilers()
+        fennec_base_url: "https://github.com/cocoa-xu/fennec_example/downloads/releases/v#{@version}",
+        fennec_nif_filename: "nif"
         # ...
     ]
   end
@@ -102,13 +105,18 @@ EOF
 # `nif_filename` is set to `nif`, which is the name of the NIF file excluding the extension.
 $ cat <<EOF | tee lib/fennec_example.ex
 defmodule :fennec_example do
-  version = Mix.Project.config()[:version]
-  use FennecPrecompile,
-    otp_app: :fennec_example,
-    force_build: false,
-    base_url: "https://github.com/cocoa-xu/fennec_exmaple/releases/download/v#{version}",
-    nif_filename: "nif",
-    version: version
+  @moduledoc false
+
+  @on_load :load_nif
+  def load_nif do
+    nif_file = '#{:code.priv_dir(:fennec_example)}/nif'
+
+    case :erlang.load_nif(nif_file, 0) do
+      :ok -> :ok
+      {:error, {:reload, _}} -> :ok
+      {:error, reason} -> IO.puts("Failed to load nif: #{reason}")
+    end
+  end
 
   def hello_world(), do: :erlang.nif_error(:not_loaded)
 end
@@ -125,13 +133,12 @@ end
 EOF
 ```
 
-In the `lib/fennec_example.ex` file, we passed a few options: 
+In the `mix.exs` file, we passed two options: 
 
-- `:otp_app`. Required. Specifies the name of the app.
-- `:version`. Optional. Specifies the version of the app. Defaults to `Mix.Project.config()[:version]`.
-- `:base_url`. Required. Specifies the base download URL of the precompiled binaries. 
-- `:nif_filename`. Required. Specifies the name of the precompiled binary file, excluding the file extension.
-- `:force_build`. Required. Indicates whether to force the app to be built.
+- `:fennec_base_url`. Required. Specifies the base download URL of the precompiled binaries. 
+- `:fennec_nif_filename`. Required. Specifies the name of the precompiled binary file, excluding the file extension.
+
+- `:fennec_force_build`. Optional. Indicates whether to force the app to be built.
 
 In the example, `force_build` is to `false` to skip the build step by default. 
 

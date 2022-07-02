@@ -11,6 +11,74 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   Check the [Precompilation Guide](PRECOMPILATION_GUIDE.md) for details.
 
+  ## Options to set in the `project` function of the `mix.exs` file.
+
+    - `:fennec_base_url`. Required.
+
+      Specifies the base download URL of the precompiled binaries.
+
+    - `:fennec_nif_filename`. Optional.
+
+      Specifies the name of the precompiled binary file, excluding the file extension.
+
+    - `:fennec_force_build`. Optional.
+
+      Indicates whether to force the app to be built.
+
+      The value of this option will always be `true` for pre-releases (like "2.1.0-dev").
+
+      When this value is `false` and there are no local or remote precompiled binaries,
+      a compilation error will be raised.
+
+    - `:fennec_force_build_args`. Optional.
+
+      Defaults to `[]`.
+
+      This option will be used when `:force_build` is `true`. The optional compiliation
+      args will be forwarded to `:elixir_make`.
+
+    - `:fennec_force_build_using_zig`. Optional.
+
+      Defaults to `false`.
+
+      This option will be used when `:force_build` is `true`. Set this option to `true`
+      to always using `zig` as the C/C++ compiler.
+
+    - `:fennec_targets`. Optional.
+
+      A list of targets [supported by Zig](https://ziglang.org/learn/overview/#support-table)
+      for which precompiled assets are avilable. By default the following targets are
+      configured:
+
+      ### on macOS
+        - `x86_64-macos`
+        - `x86_64-linux-gnu`
+        - `x86_64-linux-musl`
+        - `x86_64-windows-gnu`
+        - `aarch64-macos`
+        - `aarch64-linux-gnu`
+        - `aarch64-linux-musl`
+        - `riscv64-linux-musl`
+
+      ### on Linux
+        - `x86_64-linux-gnu`
+        - `x86_64-linux-musl`
+        - `x86_64-windows-gnu`
+        - `aarch64-linux-gnu`
+        - `aarch64-linux-musl`
+        - `riscv64-linux-musl`
+
+      `:fennec_targets` in the `project` will only be used in the following cases:
+
+        1. When `:fennec_force_build` is set to `true`. In this case, the `:targets` acts
+          as a list of compatible targets in terms of the source code. For example,
+          NIFs that are specifically written for ARM64 Linux will fail to compile
+          for other OS or CPU architeture. If the source code is not compatible with
+          the current node, the build will fail.
+        2. When `:fennec_force_build` is set to `false`. In this case, the `:targets` acts as
+          a list of available targets of the precompiled binaries. If there is no
+          match with the current node, no precompiled NIF will be downloaded and
+          the app will fail to start.
   """
 
   use Mix.Task

@@ -39,22 +39,22 @@ defmodule FennecPrecompile.Config do
   def default_targets, do: Enum.uniq(default_targets_macos() ++ default_targets_linux())
 
   def new(opts) do
-    version = Keyword.fetch!(opts, :version)
-    base_url = opts |> Keyword.fetch!(:base_url) |> validate_base_url!()
-    targets = opts |> Keyword.get(:targets, default_targets()) |> validate_targets!()
-    nif_version = opts |> Keyword.get(:nif_version, to_string(:erlang.system_info(:nif_version)))
     app = opts |> Keyword.fetch!(:app)
+    version = Keyword.fetch!(opts, :version)
+    base_url = opts |> Keyword.fetch!(:fennec_base_url) |> validate_base_url!()
+    targets = opts |> Keyword.get(:fennec_targets, default_targets()) |> validate_targets!()
+    nif_version = opts |> Keyword.get(:fennec_nif_version, to_string(:erlang.system_info(:nif_version)))
 
     %__MODULE__{
       app: app,
       base_url: base_url,
       version: version,
-      nif_filename: opts[:nif_filename] || to_string(app),
+      nif_filename: opts[:fennec_nif_filename] || to_string(app),
       nif_version: nif_version,
       targets: targets,
-      force_build: pre_release?(version) or Keyword.get(opts, :force_build, false),
-      force_build_args: opts[:force_build_args] || [],
-      force_build_using_zig: opts[:force_build_using_zig] || false
+      force_build: pre_release?(version) or Keyword.get(opts, :fennec_force_build, false),
+      force_build_args: opts[:fennec_force_build_args] || [],
+      force_build_using_zig: opts[:fennec_force_build_using_zig] || false
     }
   end
 
