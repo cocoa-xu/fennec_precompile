@@ -18,11 +18,11 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
     if config.force_build == true do
       Mix.Tasks.Fennec.Precompile.build_native(args)
     else
-      FennecPrecompile.write_metadata_to_file(config)
+      Mix.Tasks.Fennec.Precompile.write_metadata_to_file(config)
       priv_dir = Path.join([Mix.Project.app_path(), "priv"])
       load_path = "#{priv_dir}/#{config.nif_filename}.so"
       with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
-          {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
+          {:error, precomp_error} <- Mix.Tasks.Fennec.Precompile.download_or_reuse_nif_file(config) do
         message = """
         Error while downloading precompiled NIF: #{precomp_error}.
         You can force the project to build from scratch with:
@@ -39,7 +39,6 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
   end
 
   defp get_app_name() do
-    System.get_env("FENNEC_PRECOMPILE_OTP_APP", "#{Mix.Project.config()[:app]}")
-    |> String.to_atom()
+    Mix.Project.config()[:app]
   end
 end

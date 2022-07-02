@@ -30,23 +30,23 @@ defmodule Mix.Tasks.Fennec.Fetch do
 
   @impl true
   def run(flags) when is_list(flags) do
-    app = get_app_name()
+    app = Mix.Project.config()[:app]
 
     {options, _args, _invalid} = OptionParser.parse(flags, strict: @switches)
 
     urls =
       cond do
         Keyword.get(options, :all) ->
-          FennecPrecompile.available_nif_urls(app)
+          Mix.Tasks.Fennec.Precompile.available_nif_urls(app)
 
         Keyword.get(options, :only_local) ->
-          [FennecPrecompile.current_target_nif_url(app)]
+          [Mix.Tasks.Fennec.Precompile.current_target_nif_url(app)]
 
         true ->
           raise "you need to specify either \"--all\" or \"--only-local\" flags"
       end
 
-    result = FennecPrecompile.download_nif_artifacts_with_checksums!(urls, options)
+    result = Mix.Tasks.Fennec.Precompile.download_nif_artifacts_with_checksums!(urls, options)
 
     if Keyword.get(options, :print) do
       result
@@ -58,11 +58,6 @@ defmodule Mix.Tasks.Fennec.Fetch do
       |> IO.puts()
     end
 
-    FennecPrecompile.write_checksum!(app, result)
-  end
-
-  defp get_app_name() do
-    System.get_env("FENNEC_PRECOMPILE_OTP_APP", "#{Mix.Project.config()[:app]}")
-    |> String.to_atom()
+    Mix.Tasks.Fennec.Precompile.write_checksum!(app, result)
   end
 end
