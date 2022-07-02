@@ -297,8 +297,10 @@ defmodule FennecPrecompile do
       |> metadata_file()
       |> read_map_from_file()
 
+    nif_version = "#{:erlang.system_info(:nif_version)}"
     case metadata do
-      %{base_url: base_url, target: target} ->
+      %{base_url: base_url, target: target, version: version} ->
+        target = "#{to_string(app)}-nif-#{nif_version}-#{target}-#{version}"
         tar_gz_file_url(base_url, target)
 
       _ ->
