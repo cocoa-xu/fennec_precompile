@@ -3,17 +3,6 @@ defmodule FennecPrecompile do
   Drop-in library for `:elixir_make` for precompiling and using precompiled NIF
   binaries.
 
-  ## Example
-
-      defmodule MyNative do
-        use FennecPrecompile,
-          otp_app: Mix.Project.config()[:app],
-          version: "0.1.0",
-          base_url: "https://github.com/me/my_project/releases/download/v0.1.0",
-          nif_filename: "native_nif",
-          force_build: false
-      end
-
   ## Options
     - `:otp_app`. Required.
 
@@ -93,120 +82,19 @@ defmodule FennecPrecompile do
           the app will fail to start.
   """
 
-  defmacro __using__(opts) do
-    force =
-      if Code.ensure_loaded?(Mix.Tasks.Compile.ElixirMake) do
-        quote do
-          fn use_zig, args ->
-            if use_zig do
-              Mix.Tasks.Fennec.Precompile.build_native_using_zig(args)
-            else
-              Mix.Tasks.Compile.ElixirMake.run(args)
-            end
-          end
-        end
-      else
-        quote do
-          raise ":elixir_make dependency is needed to force the build. " <>
-                "Add it to your `mix.exs` file: `{:elixir_make, \">= 0.6\", optional: true}`"
-        end
-      end
-
-    quote do
-      require Logger
-
-      opts = unquote(opts)
-      otp_app = Keyword.fetch!(opts, :otp_app)
-      user_config = Application.compile_env(:fennec_precompile, [:config, otp_app], [])
-      # always override using values from user (config/config.exs)
-      opts = Keyword.merge(opts, user_config, fn _, _dev, user -> user end)
-
-      case FennecPrecompile.__using__(__MODULE__, opts) do
-        {:force_build, config} ->
-          force_build_fn = unquote(force)
-          with {:ok, []} <- force_build_fn.(config.force_build_using_zig, config.force_build_args) do
-
-            @on_load :load_fennec_precompile
-            @fennec_precompiled_load_data config.load_data
-            @fennec_precompiled_nif_filename config.nif_filename
-            @fennec_precompiled_otp_app config.otp_app
-
-            @doc false
-            def load_fennec_precompile do
-              # Remove any old modules that may be loaded so we don't get
-              # {:error, {:upgrade, 'Upgrade not supported by this NIF library.'}}
-              :code.purge(__MODULE__)
-              load_path = '#{:code.priv_dir(@fennec_precompiled_otp_app)}/#{@fennec_precompiled_nif_filename}'
-              :erlang.load_nif(load_path, @fennec_precompiled_load_data)
-            end
-          else
-            {:error, error} ->
-              raise RuntimeError, "#{inspect(error)}"
-          end
-
-        {:ok, config} ->
-          @on_load :load_fennec_precompile
-          @fennec_precompiled_load_data config.load_data
-          @fennec_precompiled_nif_filename config.nif_filename
-          @fennec_precompiled_otp_app config.otp_app
-
-          @doc false
-          def load_fennec_precompile do
-            # Remove any old modules that may be loaded so we don't get
-            # {:error, {:upgrade, 'Upgrade not supported by this NIF library.'}}
-            :code.purge(__MODULE__)
-            load_path = '#{:code.priv_dir(@fennec_precompiled_otp_app)}/#{@fennec_precompiled_nif_filename}'
-            :erlang.load_nif(load_path, @fennec_precompiled_load_data)
-          end
-
-        {:error, precomp_error} ->
-          raise precomp_error
-      end
-    end
-  end
-
-  # A helper function to extract the logic from __using__ macro.
-  @doc false
-  def __using__(module, opts) do
-    config =
-      opts
-      |> Keyword.put_new(:module, module)
-      |> FennecPrecompile.Config.new()
-
-    if config.force_build == true do
-      {:force_build, config}
-    else
-      otp_app = config.otp_app
-      write_metadata_to_file(config)
-      load_path = "#{:code.priv_dir(otp_app)}/#{config.nif_filename}.so"
-      with {:skip_if_exists, false} <- {:skip_if_exists, File.exists?(load_path)},
-          {:error, precomp_error} <- FennecPrecompile.download_or_reuse_nif_file(config) do
-        message = """
-        Error while downloading precompiled NIF: #{precomp_error}.
-        You can force the project to build from scratch with:
-            mix fennec.precompile
-        """
-
-        {:error, message}
-      else
-        _ -> {:ok, config}
-      end
-    end
-  end
-
   alias FennecPrecompile.Config
   require Logger
 
-  @available_nif_versions ~w(2.16)
+  @available_nif_versions ~w(2.14 2.15 2.16)
   @checksum_algo :sha256
   @checksum_algorithms [@checksum_algo]
 
   def write_metadata_to_file(%Config{} = config) do
-    app = config.otp_app
+    app = config.app
 
     with {:ok, target} <- target(config.targets) do
       metadata = %{
-        otp_app: app,
+        app: app,
         cached_tar_gz: Path.join([cache_dir(""), "#{target}.tar.gz"]),
         base_url: config.base_url,
         target: target,
@@ -224,15 +112,10 @@ defmodule FennecPrecompile do
     cache_dir = cache_dir("")
 
     with {:ok, target} <- target(config.targets) do
-      app = config.otp_app
+      app = config.app
       version = config.version
       tar_filename = "#{app}-nif-#{config.nif_version}-#{target}-#{version}.tar.gz"
       cached_tar_gz = Path.join([cache_dir, tar_filename])
-
-      result = %{
-        load?: true,
-        load_data: config.load_data
-      }
 
       if !File.exists?(cached_tar_gz) do
         with :ok <- File.mkdir_p(cache_dir),
@@ -245,7 +128,7 @@ defmodule FennecPrecompile do
       with {:file_exists, true} <- {:file_exists, File.exists?(cached_tar_gz)},
            {:file_integrity, :ok} <- {:file_integrity, check_file_integrity(cached_tar_gz, app)},
            {:restore_nif, true} <- {:restore_nif, restore_nif_file(cached_tar_gz, app)} do
-            {:ok, result}
+            :ok
       else
         {:file_exists, _} ->
           {:error, "Cache file not exists or cannot download"}
@@ -338,12 +221,8 @@ defmodule FennecPrecompile do
     to_string(uri)
   end
 
-  defp app_priv(%Config{} = config) do
-    :code.priv_dir(config.otp_app)
-  end
-
   defp app_priv(app) when is_atom(app) do
-    :code.priv_dir(app)
+    Path.join([Mix.Project.build_path(), "lib", to_string(app), "priv"])
   end
 
   def cache_dir(sub_dir) do
@@ -688,13 +567,13 @@ defmodule FennecPrecompile do
     |> List.last()
   end
 
-  defp checksum_map(otp_app) when is_atom(otp_app) do
-    checksum_file(otp_app)
+  defp checksum_map(app) when is_atom(app) do
+    checksum_file(app)
     |> read_map_from_file()
   end
 
-  defp check_file_integrity(file_path, otp_app) when is_atom(otp_app) do
-    checksum_map(otp_app)
+  defp check_file_integrity(file_path, app) when is_atom(app) do
+    checksum_map(app)
     |> check_integrity_from_map(file_path)
   end
 
@@ -786,8 +665,8 @@ defmodule FennecPrecompile do
     File.write!(file, ["%{\n", lines, "}\n"])
   end
 
-  def checksum_file(otp_app) when is_atom(otp_app) do
+  def checksum_file(app) when is_atom(app) do
     # Saves the file in the project root.
-    Path.join(File.cwd!(), "checksum-#{to_string(otp_app)}.exs")
+    Path.join(File.cwd!(), "checksum-#{to_string(app)}.exs")
   end
 end

@@ -164,12 +164,12 @@ defmodule Mix.Tasks.Fennec.Precompile do
   end
 
   defp get_app_name() do
-    System.get_env("FENNEC_PRECOMPILE_OTP_APP", "#{Mix.Project.config()[:app]}")
+    System.get_env("FENNEC_PRECOMPILE_OTP_APP", to_string(Mix.Project.config()[:app]))
     |> String.to_atom()
   end
 
   defp get_app_version() do
-    System.get_env("FENNEC_PRECOMPILE_VERSION", "#{Mix.Project.config()[:version]}")
+    System.get_env("FENNEC_PRECOMPILE_VERSION", to_string(Mix.Project.config()[:version]))
   end
 
   defp app_priv(app) when is_atom(app) do

@@ -3,18 +3,15 @@ defmodule FennecPrecompile.Config do
 
   # This is an internal struct to represent valid config options.
   defstruct [
-    :otp_app,
+    :app,
     :version,
     :base_url,
     :nif_filename,
     :nif_version,
     :force_build,
-    :targets,
-    :base_cache_dir,
-    :load_data,
     :force_build_args,
     :force_build_using_zig,
-    :module,
+    :targets
   ]
 
   @default_targets_macos ~w(
@@ -45,27 +42,17 @@ defmodule FennecPrecompile.Config do
     version = Keyword.fetch!(opts, :version)
     base_url = opts |> Keyword.fetch!(:base_url) |> validate_base_url!()
     targets = opts |> Keyword.get(:targets, default_targets()) |> validate_targets!()
-    nif_version = opts |> Keyword.get(:nif_version, "#{:erlang.system_info(:nif_version)}")
-    otp_app =
-      case opts[:otp_app] do
-        nil -> Mix.Project.config()[:app]
-        "" -> Mix.Project.config()[:app]
-        otp_app when is_atom(otp_app) -> otp_app
-        otp_app when is_binary(otp_app) -> String.to_atom(otp_app)
-        _ -> raise RuntimeError, "Invalid value for :otp_app"
-      end
+    nif_version = opts |> Keyword.get(:nif_version, to_string(:erlang.system_info(:nif_version)))
+    app = opts |> Keyword.fetch!(:app)
 
     %__MODULE__{
-      otp_app: otp_app,
+      app: app,
       base_url: base_url,
-      module: Keyword.fetch!(opts, :module),
       version: version,
-      nif_filename: opts[:nif_filename] || to_string(Mix.Project.config()[:app]),
+      nif_filename: opts[:nif_filename] || to_string(app),
       nif_version: nif_version,
-      load_data: opts[:load_data] || 0,
-      base_cache_dir: opts[:base_cache_dir],
       targets: targets,
-      force_build: pre_release?(version) or Keyword.fetch!(opts, :force_build),
+      force_build: pre_release?(version) or Keyword.get(opts, :force_build, false),
       force_build_args: opts[:force_build_args] || [],
       force_build_using_zig: opts[:force_build_using_zig] || false
     }
