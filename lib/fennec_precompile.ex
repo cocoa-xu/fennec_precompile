@@ -244,7 +244,7 @@ defmodule FennecPrecompile do
 
       with {:file_exists, true} <- {:file_exists, File.exists?(cached_tar_gz)},
            {:file_integrity, :ok} <- {:file_integrity, check_file_integrity(cached_tar_gz, app)},
-           {:restore_nif, :ok} <- {:restore_nif, restore_nif_file(cached_tar_gz, app)} do
+           {:restore_nif, true} <- {:restore_nif, restore_nif_file(cached_tar_gz, app)} do
             {:ok, result}
       else
         {:file_exists, _} ->
@@ -259,7 +259,17 @@ defmodule FennecPrecompile do
 
   def restore_nif_file(cached_tar_gz, app) do
     Logger.debug("Restore NIF for current node from: #{cached_tar_gz}")
-    :erl_tar.extract(cached_tar_gz, [:compressed, cwd: app_priv(app)])
+    {:ok, files} = :erl_tar.extract(cached_tar_gz, [:compressed, :memory])
+    root = app_priv(app)
+    Enum.map(files, fn {filepath, data} ->
+      filepath = Path.join([root, filepath])
+      file_dir = Path.basename(filepath)
+      if !File.dir?(file_dir) do
+        File.mkdir_p!(file_dir)
+      end
+      :ok = File.write!(filepath, data)
+    end)
+    |> Enum.all?()
   end
 
   @doc """
