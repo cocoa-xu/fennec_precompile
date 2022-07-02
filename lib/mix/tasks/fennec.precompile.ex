@@ -223,9 +223,22 @@ defmodule Mix.Tasks.Fennec.Precompile do
     archive_filename = "#{app}-nif-#{nif_version}-#{target}-#{version}"
     archive_tar_gz = "#{archive_filename}.tar.gz"
     archive_full_path = Path.expand(Path.join([cache_dir, archive_tar_gz]))
+    File.mkdir_p!(cache_dir)
     Logger.debug("Creating precompiled archive: #{archive_full_path}")
 
-    System.cmd("tar", ["-czf", "--hole-detection=raw", archive_full_path, "."])
+    czf = ["-czf", archive_full_path, "."]
+    with {_, 1} <- System.cmd("tar", ["--hole-detection=raw"] ++ czf) do
+      with {_, 0} <- System.cmd("tar", czf) do
+        :ok
+      else
+        {error, exit_code} ->
+          Logger.error("failed to create tar.gz file, tar exited with code: #{exit_code}: #{error}")
+      end
+    else
+      {_, 0} -> :ok
+      {error, exit_code} ->
+        Logger.error("failed to create tar.gz file, tar exited with code: #{exit_code}: #{error}")
+    end
 
     File.cd!(saved_cwd)
     {archive_full_path, archive_tar_gz}
