@@ -4,6 +4,7 @@ defmodule FennecPrecompile.MixProject do
   @app :fennec_precompile
   @version "0.2.0"
   @github_url "https://github.com/cocoa-xu/fennec_precompile"
+
   def project do
     [
       app: @app,
@@ -11,7 +12,7 @@ defmodule FennecPrecompile.MixProject do
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "Drop-in library for `:elixir_make` for precompiling NIF binaries with Zig as the cross-compiler.",
+      description: "Precompiler behaviour.",
       package: package(),
       docs: docs()
     ]
@@ -19,7 +20,7 @@ defmodule FennecPrecompile.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :crypto, :inets, :public_key]
+      extra_applications: [:logger]
     ]
   end
 
@@ -40,8 +41,7 @@ defmodule FennecPrecompile.MixProject do
 
   defp docs do
     [
-      main: "Mix.Tasks.Fennec.Precompile",
-      extras: ["PRECOMPILATION_GUIDE.md"],
+      main: "FennecPrecompile.Precompiler",
       source_ref: "v#{@version}",
       source_url: @github_url
     ]
