@@ -49,10 +49,11 @@ defmodule FennecPrecompile.Precompiler do
 
       @return if Version.match?(System.version(), "~> 1.9"), do: {:ok, []}, else: :ok
       def run(args) do
-        with {:ok, precompiled_artefacts} <- precompile(args, all_supported_targets()) do
-          IO.puts("#{inspect(precompiled_artefacts)}")
+        with {:ok, _precompiled_artefacts} <- precompile(args, all_supported_targets()) do
+          @return
+        else
+          error -> Logger.error("Error: #{inspect(error)}")
         end
-        @return
       end
     end
   end
