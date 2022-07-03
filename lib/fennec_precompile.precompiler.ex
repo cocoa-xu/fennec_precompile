@@ -21,7 +21,7 @@ defmodule FennecPrecompile.Precompiler do
   - `:checksum_algo`, name of the checksum algorithm.
   - `:checksum`, the checksum of the archived build artefact using `:checksum_algo`.
   """
-  @type precompiled_artefact_detail :: %{:path => String.t(), :checksum => String.t(), :checksum_algo => Atom.t()}
+  @type precompiled_artefact_detail :: %{:path => String.t(), :checksum => String.t(), :checksum_algo => atom}
 
   @typedoc """
   A tuple that indicates the target and the corresponding precompiled artefact detail info.

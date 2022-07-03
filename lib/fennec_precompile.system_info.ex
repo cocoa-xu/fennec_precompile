@@ -130,8 +130,8 @@ defmodule FennecPrecompile.SystemInfo do
 
   """
   @spec target_config(boolean()) :: %{
-    os_type: {:unix, Atom.t()} | {:win32, Atom.t()},
-    target_system: Map.t(),
+    os_type: {:unix, atom} | {:win32, atom},
+    target_system: %{},
     word_size: 4 | 8,
     nif_version: String.t()
   }
@@ -293,7 +293,7 @@ defmodule FennecPrecompile.SystemInfo do
       %{abi: "darwin21.4.0", arch: "aarch64", os: "apple"}
 
   """
-  @spec system_architecture() :: %{Atom.t() => String.t()} | %{}
+  @spec system_architecture() :: %{atom => String.t()} | %{}
   def system_architecture do
     base =
       :erlang.system_info(:system_architecture)
