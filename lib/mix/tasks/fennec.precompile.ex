@@ -89,17 +89,17 @@ defmodule Mix.Tasks.Fennec.Precompile do
   @crosscompiler :zig
   @available_nif_versions ~w(2.16)
 
-  @impl true
+  @impl Fennec.Precompiler
   def all_supported_targets() do
     Fennec.SystemInfo.default_targets(@crosscompiler)
   end
 
-  @impl true
+  @impl Fennec.Precompiler
   def current_target() do
     Fennec.SystemInfo.target(@crosscompiler)
   end
 
-  @impl true
+  @impl Fennec.Precompiler
   def precompile(args, targets) do
     IO.puts("#{inspect(targets)}")
 

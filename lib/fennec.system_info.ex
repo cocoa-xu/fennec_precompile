@@ -358,16 +358,24 @@ defmodule Fennec.SystemInfo do
   end
 
   def default_targets(:zig) do
-    ~w(
-      x86_64-macos
-      aarch64-macos
-      x86_64-linux-gnu
-      x86_64-linux-musl
-      x86_64-windows-gnu
-      aarch64-linux-gnu
-      aarch64-linux-musl
-      riscv64-linux-musl
-    )
+    common_targest =
+      ~w(
+        x86_64-linux-gnu
+        x86_64-linux-musl
+        x86_64-windows-gnu
+        aarch64-linux-gnu
+        aarch64-linux-musl
+        riscv64-linux-musl
+      )
+    with {:unix, :darwin}  <- :os.type() do
+      ~w(
+        x86_64-macos
+        aarch64-macos
+      )
+    else
+      _ -> []
+    end
+    ++ common_targest
   end
 
   @doc """
