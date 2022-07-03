@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
     config =
       Mix.Project.config()
       |> Keyword.merge(Keyword.get(@user_config, app, []), fn _key, _mix, user_config -> user_config end)
-      |> FennecPrecompile.Config.new()
+      |> Fennec.Config.new()
 
     if config.force_build == true do
       Mix.Tasks.Fennec.Precompile.build_native(args)

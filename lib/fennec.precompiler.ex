@@ -9,12 +9,15 @@ defmodule Fennec.Precompiler do
   """
   @callback all_supported_targets() :: [String.t()]
 
+  @type precompiled_artefact_detail :: %{:path => String.t(), :checksum => String.t(), :checksum_algo => Atom.t()}
+  @type precompiled_artefact :: {String.t(), precompiled_artefact_detail}
+
   @doc """
   This callback should precompile the library to the given target(s).
 
   Returns a list of `{target, acrhived_artefacts}` if successfully compiled.
   """
-  @callback precompile([String.t()], [String.t()]) :: {:ok, [{String.t(), String.t()}]} | {:error, String.t()}
+  @callback precompile([String.t()], [String.t()]) :: {:ok, [precompiled_artefact]} | no_return
 
   defmacro __using__(_opts) do
     quote do

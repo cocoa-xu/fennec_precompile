@@ -1,4 +1,4 @@
-defmodule FennecPrecompile.Config do
+defmodule Fennec.Config do
   @moduledoc false
 
   # This is an internal struct to represent valid config options.

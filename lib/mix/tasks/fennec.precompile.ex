@@ -82,8 +82,9 @@ defmodule Mix.Tasks.Fennec.Precompile do
   """
 
   require Logger
+  alias Fennec.Config
+
   use Fennec.Precompiler
-  alias FennecPrecompile.Config
 
   @crosscompiler :zig
   @available_nif_versions ~w(2.16)
@@ -111,27 +112,16 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
     app = Mix.Project.config()[:app]
     version = Mix.Project.config()[:version]
-    do_fennec_precompile(app, version, args, targets, saved_cwd, cache_dir)
-    # if post_clean do
-    #   make_priv_dir(app, :clean)
-    # else
-    #   with {:ok, target} <- Fennec.SystemInfo.target(targets) do
-    #     version = get_app_version()
-    #     nif_version = "#{:erlang.system_info(:nif_version)}"
-    #     tar_filename = "#{app}-nif-#{nif_version}-#{target}-#{version}.tar.gz"
-    #     cached_tar_gz = Path.join([cache_dir, tar_filename])
-    #     FennecPrecompile.restore_nif_file(cached_tar_gz, app)
-    #   end
-    # end
-    # Mix.Project.build_structure()
-    :ok
+    precompiled_artefacts = do_fennec_precompile(app, version, args, targets, saved_cwd, cache_dir)
+    with {:ok, target} <- Fennec.SystemInfo.target(targets) do
+      nif_version = "#{:erlang.system_info(:nif_version)}"
+      tar_filename = archive_filename(app, version, nif_version, target)
+      cached_tar_gz = Path.join([cache_dir, tar_filename])
+      restore_nif_file(cached_tar_gz, app)
+    end
+    Mix.Project.build_structure()
+    {:ok, precompiled_artefacts}
   end
-
-  # @user_config Application.compile_env(:fennec_precompile, :config, [])
-  # @impl true
-  # def run(args) do
-  #   build_with_targets(args, compile_targets(), true)
-  # end
 
   def build_with_targets(args, targets, post_clean) do
     saved_cwd = File.cwd!()
@@ -149,7 +139,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
     else
       with {:ok, target} <- Fennec.SystemInfo.target(targets) do
         nif_version = "#{:erlang.system_info(:nif_version)}"
-        tar_filename = "#{app}-nif-#{nif_version}-#{target}-#{version}.tar.gz"
+        tar_filename = archive_filename(app, version, nif_version, target)
         cached_tar_gz = Path.join([cache_dir, tar_filename])
         restore_nif_file(cached_tar_gz, app)
       end
@@ -190,13 +180,14 @@ defmodule Mix.Tasks.Fennec.Precompile do
     saved_cxx = System.get_env("CXX") || ""
     saved_cpp = System.get_env("CPP") || ""
 
-    checksums = fennec_precompile(app, version, args, targets, cache_dir)
-    write_checksum!(app, checksums)
+    precompiled_artefacts = fennec_precompile(app, version, args, targets, cache_dir)
+    write_checksum!(app, precompiled_artefacts)
 
     File.cd!(saved_cwd)
     System.put_env("CC", saved_cc)
     System.put_env("CXX", saved_cxx)
     System.put_env("CPP", saved_cpp)
+    precompiled_artefacts
   end
 
   defp fennec_precompile(app, version, args, targets, cache_dir) do
@@ -219,7 +210,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
       {archive_full_path, archive_tar_gz} = create_precompiled_archive(app, version, target, cache_dir)
       {:ok, algo, checksum} = compute_checksum(archive_full_path, :sha256)
-      [%{path: archive_tar_gz, checksum_algo: algo, checksum: checksum} | checksums]
+      [{target, %{path: archive_tar_gz, checksum_algo: algo, checksum: checksum}} | checksums]
     end)
   end
 
@@ -230,8 +221,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
     File.cd!(app_priv)
     nif_version = Fennec.SystemInfo.current_nif_version()
 
-    archive_filename = "#{app}-nif-#{nif_version}-#{target}-#{version}"
-    archive_tar_gz = "#{archive_filename}.tar.gz"
+    archive_tar_gz = archive_filename(app, version, nif_version, target)
     archive_full_path = Path.expand(Path.join([cache_dir, archive_tar_gz]))
     File.mkdir_p!(cache_dir)
     Logger.debug("Creating precompiled archive: #{archive_full_path}")
@@ -316,7 +306,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
     app = config.app
 
     with {:ok, target} <- Fennec.SystemInfo.target(:zig) do
-      archived_artefact_file = "#{app}-nif-#{Fennec.SystemInfo.current_nif_version()}-#{target}-#{config.version}.tar.gz"
+      archived_artefact_file = archive_filename(app, config.version, Fennec.SystemInfo.current_nif_version(), target)
       metadata = %{
         app: app,
         cached_tar_gz: Path.join([Fennec.SystemInfo.cache_dir(), archived_artefact_file]),
@@ -331,14 +321,17 @@ defmodule Mix.Tasks.Fennec.Precompile do
     :ok
   end
 
+  def archive_filename(app, version, nif_version, target) do
+    "#{app}-nif-#{nif_version}-#{target}-#{version}.tar.gz"
+  end
+
   def download_or_reuse_nif_file(%Config{} = config) do
     Logger.debug("Download/Reuse: #{inspect(config)}")
     cache_dir = Fennec.SystemInfo.cache_dir()
 
     with {:ok, target} <- Fennec.SystemInfo.target(config.targets) do
       app = config.app
-      version = config.version
-      tar_filename = "#{app}-nif-#{config.nif_version}-#{target}-#{version}.tar.gz"
+      tar_filename = archive_filename(app, config.version, config.nif_version, target)
       cached_tar_gz = Path.join([cache_dir, tar_filename])
 
       if !File.exists?(cached_tar_gz) do
@@ -644,11 +637,11 @@ defmodule Mix.Tasks.Fennec.Precompile do
   # Write the checksum file with all NIFs available.
   # It receives the module name and checksums.
   @doc false
-  def write_checksum!(app, checksums) do
+  def write_checksum!(app, precompiled_artefacts) do
     file = checksum_file(app)
 
     pairs =
-      for %{path: path, checksum: checksum, checksum_algo: algo} <- checksums, into: %{} do
+      for {_target, %{path: path, checksum: checksum, checksum_algo: algo}} <- precompiled_artefacts, into: %{} do
         basename = Path.basename(path)
         checksum = "#{algo}:#{checksum}"
         {basename, checksum}
