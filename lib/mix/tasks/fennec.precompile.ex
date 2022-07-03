@@ -87,7 +87,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
   use Fennec.Precompiler
 
   @crosscompiler :zig
-  @available_nif_versions ~w(2.16)
+  @available_nif_versions ~w(2.14 2.15 2.16)
 
   @impl Fennec.Precompiler
   def all_supported_targets() do
@@ -101,14 +101,8 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   @impl Fennec.Precompiler
   def precompile(args, targets) do
-    IO.puts("#{inspect(targets)}")
-
     saved_cwd = File.cwd!()
-    cache_dir = System.get_env("FENNEC_CACHE_DIR", nil)
-    if cache_dir do
-      System.put_env("FENNEC_CACHE_DIR", cache_dir)
-    end
-    cache_dir = Fennec.SystemInfo.cache_dir()
+    cache_dir = System.get_env("FENNEC_CACHE_DIR", Fennec.SystemInfo.cache_dir())
 
     app = Mix.Project.config()[:app]
     version = Mix.Project.config()[:version]
@@ -125,11 +119,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   def build_with_targets(args, targets, post_clean) do
     saved_cwd = File.cwd!()
-    cache_dir = System.get_env("FENNEC_CACHE_DIR", nil)
-    if cache_dir do
-      System.put_env("FENNEC_CACHE_DIR", cache_dir)
-    end
-    cache_dir = Fennec.SystemInfo.cache_dir()
+    cache_dir = System.get_env("FENNEC_CACHE_DIR", Fennec.SystemInfo.cache_dir())
 
     app = Mix.Project.config()[:app]
     version = Mix.Project.config()[:version]
@@ -138,7 +128,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
       make_priv_dir(app, :clean)
     else
       with {:ok, target} <- Fennec.SystemInfo.target(targets) do
-        nif_version = "#{:erlang.system_info(:nif_version)}"
+        nif_version = Fennec.SystemInfo.current_nif_version()
         tar_filename = archive_filename(app, version, nif_version, target)
         cached_tar_gz = Path.join([cache_dir, tar_filename])
         restore_nif_file(cached_tar_gz, app)
@@ -149,7 +139,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
   end
 
   def build_native_using_zig(args) do
-    with {:ok, target} <- Fennec.SystemInfo.target(:zig) do
+    with {:ok, target} <- Fennec.SystemInfo.target(@crosscompiler) do
       build_with_targets(args, [target], false)
     end
   end
@@ -284,7 +274,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
     end
   end
 
-  defp app_priv(app) when is_atom(app) do
+  def app_priv(app) when is_atom(app) do
     build_path = Mix.Project.build_path()
     Path.join([build_path, "lib", "#{app}", "priv"])
   end
@@ -304,16 +294,18 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   def write_metadata_to_file(%Config{} = config) do
     app = config.app
+    version = config.version
+    nif_version = config.nif_version
 
-    with {:ok, target} <- Fennec.SystemInfo.target(:zig) do
-      archived_artefact_file = archive_filename(app, config.version, Fennec.SystemInfo.current_nif_version(), target)
+    with {:ok, target} <- Fennec.SystemInfo.target(@crosscompiler) do
+      archived_artefact_file = archive_filename(app, version, nif_version, target)
       metadata = %{
         app: app,
         cached_tar_gz: Path.join([Fennec.SystemInfo.cache_dir(), archived_artefact_file]),
         base_url: config.base_url,
         target: target,
         targets: config.targets,
-        version: config.version
+        version: version
       }
 
       write_metadata(app, metadata)
