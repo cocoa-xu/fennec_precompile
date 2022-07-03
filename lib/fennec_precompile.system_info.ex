@@ -9,15 +9,15 @@ defmodule FennecPrecompile.SystemInfo do
 
   ## Examples
 
-      iex> Fennec.SystemInfo.target(:rust)
+      iex> FennecPrecompile.SystemInfo.target(:rust)
       {:ok, "aarch64-apple-darwin"}
-      iex> Fennec.SystemInfo.target(:zig)
+      iex> FennecPrecompile.SystemInfo.target(:zig)
       {:ok, "aarch64-macos"}
 
   """
   def target(convention, opts \\ []) do
     config = opts[:target_config] || target_config()
-    normalize_target_system = opts[:normalize_target_system] || &Fennec.SystemInfo.normalize_target_system(&1, &2)
+    normalize_target_system = opts[:normalize_target_system] || &FennecPrecompile.SystemInfo.normalize_target_system(&1, &2)
     available_targets = opts[:available_targets] || default_targets(convention)
     available_nif_versions = opts[:available_nif_versions] || @available_nif_versions
 
@@ -110,7 +110,7 @@ defmodule FennecPrecompile.SystemInfo do
 
   ## Example
 
-      iex> Fennec.SystemInfo.target_config(false)
+      iex> FennecPrecompile.SystemInfo.target_config(false)
       %{
         nif_version: "2.16",
         os_type: {:unix, :darwin},
@@ -120,7 +120,7 @@ defmodule FennecPrecompile.SystemInfo do
 
       iex> System.put_env("TARGET_ARCH", "x86_64")
       :ok
-      iex> Fennec.SystemInfo.target_config(true)
+      iex> FennecPrecompile.SystemInfo.target_config(true)
       %{
         nif_version: "2.16",
         os_type: {:unix, :darwin},
@@ -219,9 +219,9 @@ defmodule FennecPrecompile.SystemInfo do
 
   ## Example
 
-    iex> system_architecture = Fennec.SystemInfo.system_architecture()
+    iex> system_architecture = FennecPrecompile.SystemInfo.system_architecture()
     %{abi: "darwin21.4.0", arch: "aarch64", os: "apple"}
-    iex> Fennec.SystemInfo.system_architecture_to_string(system_architecture)
+    iex> FennecPrecompile.SystemInfo.system_architecture_to_string(system_architecture)
     "aarch64-apple-darwin21.4.0"
 
   """
@@ -239,7 +239,7 @@ defmodule FennecPrecompile.SystemInfo do
 
   ## Example
 
-    iex> Fennec.SystemInfo.current_nif_version()
+    iex> FennecPrecompile.SystemInfo.current_nif_version()
     "2.16"
 
   """
@@ -289,7 +289,7 @@ defmodule FennecPrecompile.SystemInfo do
 
   ## Examples
 
-      iex> Fennec.SystemInfo.system_architecture()
+      iex> FennecPrecompile.SystemInfo.system_architecture()
       %{abi: "darwin21.4.0", arch: "aarch64", os: "apple"}
 
   """

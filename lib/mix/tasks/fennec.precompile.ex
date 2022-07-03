@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.FennecPrecompile.Precompile do
+defmodule Mix.Tasks.Fennec.Precompile do
   @moduledoc """
   Download and use precompiled NIFs safely with checksums.
 

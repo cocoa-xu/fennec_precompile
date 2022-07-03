@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
     config =
       Mix.Project.config()
       |> Keyword.merge(Keyword.get(@user_config, app, []), fn _key, _mix, user_config -> user_config end)
-      |> Fennec.Config.new()
+      |> FennecPrecompile.Config.new()
 
     if config.force_build == true do
       Mix.Tasks.Fennec.Precompile.build_native(args)
@@ -32,7 +32,7 @@ defmodule Mix.Tasks.Compile.FennecPrecompile do
         message = """
         Error while downloading precompiled NIF: #{precomp_error}.
         You can force the project to build from scratch with:
-            mix fennec.precompile
+            mix FennecPrecompile.precompile
         """
 
         {:error, message}
