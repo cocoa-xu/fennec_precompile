@@ -1,4 +1,4 @@
-defmodule Fennec.Precompiler do
+defmodule FennecPrecompile.Precompiler do
   @typedoc """
   Target triplets
   """
@@ -44,7 +44,7 @@ defmodule Fennec.Precompiler do
 
   defmacro __using__(_opts) do
     quote do
-      @behaviour Fennec.Precompiler
+      @behaviour FennecPrecompile.Precompiler
       use Mix.Task
 
       @return if Version.match?(System.version(), "~> 1.9"), do: {:ok, []}, else: :ok

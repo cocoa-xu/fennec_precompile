@@ -1,4 +1,4 @@
-defmodule Fennec.SystemInfo do
+defmodule FennecPrecompile.SystemInfo do
   @available_nif_versions ~w(2.14 2.15 2.16)
 
   @doc """

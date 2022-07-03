@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Fennec.Precompile do
+defmodule Mix.Tasks.FennecPrecompile.Precompile do
   @moduledoc """
   Download and use precompiled NIFs safely with checksums.
 
@@ -82,32 +82,32 @@ defmodule Mix.Tasks.Fennec.Precompile do
   """
 
   require Logger
-  alias Fennec.Config
+  alias FennecPrecompile.Config
 
-  use Fennec.Precompiler
+  use FennecPrecompile.Precompiler
 
   @crosscompiler :zig
   @available_nif_versions ~w(2.14 2.15 2.16)
 
-  @impl Fennec.Precompiler
+  @impl FennecPrecompile.Precompiler
   def all_supported_targets() do
-    Fennec.SystemInfo.default_targets(@crosscompiler)
+    FennecPrecompile.SystemInfo.default_targets(@crosscompiler)
   end
 
-  @impl Fennec.Precompiler
+  @impl FennecPrecompile.Precompiler
   def current_target() do
-    Fennec.SystemInfo.target(@crosscompiler)
+    FennecPrecompile.SystemInfo.target(@crosscompiler)
   end
 
-  @impl Fennec.Precompiler
+  @impl FennecPrecompile.Precompiler
   def precompile(args, targets) do
     saved_cwd = File.cwd!()
-    cache_dir = System.get_env("FENNEC_CACHE_DIR", Fennec.SystemInfo.cache_dir())
+    cache_dir = System.get_env("FENNEC_CACHE_DIR", FennecPrecompile.SystemInfo.cache_dir())
 
     app = Mix.Project.config()[:app]
     version = Mix.Project.config()[:version]
     precompiled_artefacts = do_fennec_precompile(app, version, args, targets, saved_cwd, cache_dir)
-    with {:ok, target} <- Fennec.SystemInfo.target(targets) do
+    with {:ok, target} <- FennecPrecompile.SystemInfo.target(targets) do
       nif_version = "#{:erlang.system_info(:nif_version)}"
       tar_filename = archive_filename(app, version, nif_version, target)
       cached_tar_gz = Path.join([cache_dir, tar_filename])
@@ -119,7 +119,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   def build_with_targets(args, targets, post_clean) do
     saved_cwd = File.cwd!()
-    cache_dir = System.get_env("FENNEC_CACHE_DIR", Fennec.SystemInfo.cache_dir())
+    cache_dir = System.get_env("FENNEC_CACHE_DIR", FennecPrecompile.SystemInfo.cache_dir())
 
     app = Mix.Project.config()[:app]
     version = Mix.Project.config()[:version]
@@ -127,8 +127,8 @@ defmodule Mix.Tasks.Fennec.Precompile do
     if post_clean do
       make_priv_dir(app, :clean)
     else
-      with {:ok, target} <- Fennec.SystemInfo.target(targets) do
-        nif_version = Fennec.SystemInfo.current_nif_version()
+      with {:ok, target} <- FennecPrecompile.SystemInfo.target(targets) do
+        nif_version = FennecPrecompile.SystemInfo.current_nif_version()
         tar_filename = archive_filename(app, version, nif_version, target)
         cached_tar_gz = Path.join([cache_dir, tar_filename])
         restore_nif_file(cached_tar_gz, app)
@@ -139,7 +139,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
   end
 
   def build_native_using_zig(args) do
-    with {:ok, target} <- Fennec.SystemInfo.target(@crosscompiler) do
+    with {:ok, target} <- FennecPrecompile.SystemInfo.target(@crosscompiler) do
       build_with_targets(args, [target], false)
     end
   end
@@ -209,7 +209,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
     app_priv = app_priv(app)
     File.cd!(app_priv)
-    nif_version = Fennec.SystemInfo.current_nif_version()
+    nif_version = FennecPrecompile.SystemInfo.current_nif_version()
 
     archive_tar_gz = archive_filename(app, version, nif_version, target)
     archive_full_path = Path.expand(Path.join([cache_dir, archive_tar_gz]))
@@ -297,11 +297,11 @@ defmodule Mix.Tasks.Fennec.Precompile do
     version = config.version
     nif_version = config.nif_version
 
-    with {:ok, target} <- Fennec.SystemInfo.target(@crosscompiler) do
+    with {:ok, target} <- FennecPrecompile.SystemInfo.target(@crosscompiler) do
       archived_artefact_file = archive_filename(app, version, nif_version, target)
       metadata = %{
         app: app,
-        cached_tar_gz: Path.join([Fennec.SystemInfo.cache_dir(), archived_artefact_file]),
+        cached_tar_gz: Path.join([FennecPrecompile.SystemInfo.cache_dir(), archived_artefact_file]),
         base_url: config.base_url,
         target: target,
         targets: config.targets,
@@ -319,9 +319,9 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
   def download_or_reuse_nif_file(%Config{} = config) do
     Logger.debug("Download/Reuse: #{inspect(config)}")
-    cache_dir = Fennec.SystemInfo.cache_dir()
+    cache_dir = FennecPrecompile.SystemInfo.cache_dir()
 
-    with {:ok, target} <- Fennec.SystemInfo.target(config.targets) do
+    with {:ok, target} <- FennecPrecompile.SystemInfo.target(config.targets) do
       app = config.app
       tar_filename = archive_filename(app, config.version, config.nif_version, target)
       cached_tar_gz = Path.join([cache_dir, tar_filename])
@@ -375,7 +375,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
       _ ->
         raise "metadata about current target for the app #{inspect(app)} is not available. " <>
-                "Please compile the project again with: `mix fennec.precompile`"
+                "Please compile the project again with: `mix FennecPrecompile.precompile`"
     end
   end
 
@@ -397,7 +397,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
 
       _ ->
         raise "metadata about current target for the app #{inspect(app)} is not available. " <>
-                "Please compile the project again with: `mix fennec.precompile`"
+                "Please compile the project again with: `mix FennecPrecompile.precompile`"
     end
   end
 
@@ -436,7 +436,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
   end
 
   defp metadata_file(app) do
-    fennec_precompiled_cache = Fennec.SystemInfo.cache_dir("metadata")
+    fennec_precompiled_cache = FennecPrecompile.SystemInfo.cache_dir("metadata")
     Path.join(fennec_precompiled_cache, "metadata-#{app}.exs")
   end
 
@@ -499,7 +499,7 @@ defmodule Mix.Tasks.Fennec.Precompile do
     tasks =
       Task.async_stream(urls, fn url -> {url, download_nif_artifact(url)} end, timeout: :infinity)
 
-    cache_dir = Fennec.SystemInfo.cache_dir()
+    cache_dir = FennecPrecompile.SystemInfo.cache_dir()
 
     Enum.flat_map(tasks, fn {:ok, result} ->
       with {:download, {url, download_result}} <- {:download, result},
