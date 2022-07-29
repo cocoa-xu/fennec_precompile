@@ -26,6 +26,7 @@ defmodule FennecPrecompile.MixProject do
 
   defp deps do
     [
+      {:elixir_make, "~> 0.6", runtime: false, path: "../elixir_make"},
       {:ex_doc, "~> 0.23", only: :docs, runtime: false}
     ]
   end
