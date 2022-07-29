@@ -99,7 +99,7 @@ defmodule Mix.Tasks.ElixirMake.FennecPrecompile do
       with {:file_exists, true} <- {:file_exists, File.exists?(cached_tar_gz)},
            {:file_integrity, :ok} <-
              {:file_integrity, ElixirMake.Artefact.check_file_integrity(cached_tar_gz, app)},
-           {:restore_nif, true} <-
+           {:restore_nif, :ok} <-
              {:restore_nif, ElixirMake.Artefact.restore_nif_file(cached_tar_gz, app)} do
         :ok
       else

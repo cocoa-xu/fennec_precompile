@@ -2,7 +2,7 @@ defmodule FennecPrecompile.MixProject do
   use Mix.Project
 
   @app :fennec_precompile
-  @version "0.2.0"
+  @version "0.3.0"
   @github_url "https://github.com/cocoa-xu/fennec_precompile"
 
   def project do
