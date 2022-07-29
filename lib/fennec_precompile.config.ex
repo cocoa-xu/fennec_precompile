@@ -43,7 +43,9 @@ defmodule FennecPrecompile.Config do
     version = Keyword.fetch!(opts, :version)
     base_url = opts |> Keyword.fetch!(:fennec_base_url) |> validate_base_url!()
     targets = opts |> Keyword.get(:fennec_targets, default_targets()) |> validate_targets!()
-    nif_version = opts |> Keyword.get(:fennec_nif_version, to_string(:erlang.system_info(:nif_version)))
+
+    nif_version =
+      opts |> Keyword.get(:fennec_nif_version, to_string(:erlang.system_info(:nif_version)))
 
     %__MODULE__{
       app: app,

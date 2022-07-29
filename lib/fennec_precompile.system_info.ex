@@ -17,7 +17,11 @@ defmodule FennecPrecompile.SystemInfo do
   """
   def target(convention, opts \\ []) do
     config = opts[:target_config] || target_config()
-    normalize_target_system = opts[:normalize_target_system] || &FennecPrecompile.SystemInfo.normalize_target_system(&1, &2)
+
+    normalize_target_system =
+      opts[:normalize_target_system] ||
+        (&FennecPrecompile.SystemInfo.normalize_target_system(&1, &2))
+
     available_targets = opts[:available_targets] || default_targets(convention)
     available_nif_versions = opts[:available_nif_versions] || @available_nif_versions
 
@@ -46,6 +50,7 @@ defmodule FennecPrecompile.SystemInfo do
                     8 -> "x86_64"
                     _ -> "unknown"
                   end
+
                 :zig ->
                   case config.word_size do
                     4 -> "x86"
@@ -130,18 +135,19 @@ defmodule FennecPrecompile.SystemInfo do
 
   """
   @spec target_config(boolean()) :: %{
-    os_type: {:unix, atom} | {:win32, atom},
-    target_system: %{},
-    word_size: 4 | 8,
-    nif_version: String.t()
-  }
+          os_type: {:unix, atom} | {:win32, atom},
+          target_system: %{},
+          word_size: 4 | 8,
+          nif_version: String.t()
+        }
   def target_config(allow_env_var_override \\ true) do
     current_nif_version = current_nif_version()
+
     override =
       if allow_env_var_override do
-        &(maybe_override_with_env_vars(&1))
+        &maybe_override_with_env_vars(&1)
       else
-        &(&1)
+        & &1
       end
 
     nif_version =
@@ -171,6 +177,7 @@ defmodule FennecPrecompile.SystemInfo do
 
   """
   def normalize_target_system(target_system, convention)
+
   def normalize_target_system(target_system, :rust) do
     cond do
       target_system.abi =~ "darwin" ->
@@ -201,11 +208,12 @@ defmodule FennecPrecompile.SystemInfo do
         %{target_system | arch: arch}
 
       target_system.os =~ "windows" ->
-        arch = case target_system.arch do
-          "amd64" -> "x64"
-          "x86_64" -> "x64"
-          _ -> target_system.arch
-        end
+        arch =
+          case target_system.arch do
+            "amd64" -> "x64"
+            "x86_64" -> "x64"
+            _ -> target_system.arch
+          end
 
         %{target_system | arch: arch}
 
@@ -344,6 +352,7 @@ defmodule FennecPrecompile.SystemInfo do
   Return a list of default targets.
   """
   def default_targets(convention)
+
   def default_targets(:rust) do
     ~w(
       aarch64-apple-darwin
@@ -358,8 +367,7 @@ defmodule FennecPrecompile.SystemInfo do
   end
 
   def default_targets(:zig) do
-    common_targest =
-      ~w(
+    common_targest = ~w(
         x86_64-linux-gnu
         x86_64-linux-musl
         x86_64-windows-gnu
@@ -367,15 +375,16 @@ defmodule FennecPrecompile.SystemInfo do
         aarch64-linux-musl
         riscv64-linux-musl
       )
-    with {:unix, :darwin}  <- :os.type() do
+
+    with {:unix, :darwin} <- :os.type() do
       ~w(
         x86_64-macos
         aarch64-macos
       )
     else
       _ -> []
-    end
-    ++ common_targest
+    end ++
+      common_targest
   end
 
   @doc """

@@ -77,7 +77,8 @@ defmodule Mix.Tasks.ElixirMake.FennecPrecompile do
     Logger.debug("Download/Reuse: #{inspect(config)}")
     cache_dir = ElixirMake.Artefact.cache_dir()
 
-    with {:ok, target} <- FennecPrecompile.SystemInfo.target(@crosscompiler, available_targets: config.targets) do
+    with {:ok, target} <-
+           FennecPrecompile.SystemInfo.target(@crosscompiler, available_targets: config.targets) do
       app = config.app
 
       tar_filename =
